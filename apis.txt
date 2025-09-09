@@ -1,0 +1,17 @@
+API Name
+Register
+Login
+Send OTP
+Confirm OTP
+Verify number
+Edit profile
+Get profile
+Get dashboard usage statistics
+Get vocabulary
+Get grammer questions
+Verify grammer answers
+Get reading stories and questions
+Verify reading answers
+Get writing topic
+Check writing answer
+Get speaking data

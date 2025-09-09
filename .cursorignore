@@ -1,0 +1,109 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+# .venv/
+venv/
+env/
+ENV/
+
+# Distribution and packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Log files
+logs/*.log
+logs/*.txt
+*.log
+
+# Large data files and models
+models/
+*.model
+*.bin
+*.h5
+*.pkl
+*.joblib
+
+# Audio and video files
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+*.aac
+*.wma
+*.opus
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+
+# Temporary directories
+temp_audio/
+temp_video/
+processed_audio/
+processed_video/
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Cache directories
+.cache/
+cache/
+gradio_cached_examples/
+
+# Environment and configuration files
+.env
+.env.local
+.env.production
+.env.staging
+config.ini
+secrets.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Lock files (keep uv.lock but ignore others)
+poetry.lock
+Pipfile.lock
+pdm.lock
+
+# Node modules (if any frontend components)
+node_modules/
+
+# Large lock file (uv.lock is quite large)
+uv.lock 

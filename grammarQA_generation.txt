@@ -1,0 +1,147 @@
+[
+    {
+        "standard": 1,
+        "topics": [
+            "Alphabet & Capitalization",
+            "Nouns (Common, Proper)",
+            "Pronouns (I, you, he, she)",
+            "Verbs (basic actions)",
+            "Articles (a, an, the)",
+            "Basic Punctuation (. ? !)"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 2,
+        "topics": [
+            "Adjectives (describing words)",
+            "Prepositions (in, on, under, over)",
+            "Conjunctions (and, but, or)",
+            "Nouns (Singular Plural)",
+            "Pronouns (Possessive: my, your, his, her)"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 3,
+        "topics": [
+            "Nouns (Gender, Collective)",
+            "Pronouns (Reflexive, Demonstrative)",
+            "Adjectives (Comparative, Superlative)",
+            "Simple Present & Past Tense",
+            "Punctuation (comma, apostrophe)"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 4,
+        "topics": [
+            "Adverbs (manner, place, time)",
+            "Prepositions (time, direction)",
+            "Conjunctions (because, so, although)",
+            "Types of Sentences (Declarative, Interrogative, Exclamatory, Imperative)",
+            "Subject & Predicate"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 5,
+        "topics": [
+            "Tenses (Present, Past, Future - Simple forms)",
+            "Subject–Verb Agreement",
+            "Direct & Indirect Speech (intro)",
+            "Active & Passive Voice (intro)",
+            "Paragraph Grammar (sequence, coherence)"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 6,
+        "topics": [
+            "Clauses (Noun, Adjective, Adverb - intro)",
+            "Phrases (Noun, Verb, Prepositional)",
+            "Modals (can, may, must, should)",
+            "Reported Speech (statements, questions)",
+            "Pronoun–Antecedent Agreement"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 7,
+        "topics": [
+            "Tenses (Perfect forms)",
+            "Conditionals (Zero, First)",
+            "Relative Pronouns & Clauses",
+            "Active & Passive Voice (expanded)",
+            "Idioms & Basic Phrasal Verbs"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 8,
+        "topics": [
+            "Clauses (Complex & Compound)",
+            "Conditionals (Second, Third)",
+            "Advanced Modals (might, would, shall, ought to)",
+            "Phrasal Verbs (common use)",
+            "Advanced Prepositions (beyond, within, throughout)"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 9,
+        "topics": [
+            "Tenses (Perfect Continuous forms)",
+            "Question Tags",
+            "Subjunctive Mood (intro)",
+            "Narrative Grammar (sequence of tenses)",
+            "Direct & Indirect Speech (commands, requests)"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 10,
+        "topics": [
+            "Complex Sentence Structures",
+            "Active vs Passive (all tenses)",
+            "Reported Speech (exclamations, suggestions)",
+            "Parallelism & Consistency",
+            "Essay Writing Grammar (thesis, cohesion)"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 11,
+        "topics": [
+            "Advanced Modals (shall, will, should, would nuance)",
+            "Inversion (rare structures)",
+            "Nominalization (changing verbs to nouns)",
+            "Word Formation (prefixes, suffixes, roots)",
+            "Error Spotting & Correction"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    },
+    {
+        "standard": 12,
+        "topics": [
+            "Emphasis (cleft sentences, fronting)",
+            "Ellipsis & Substitution",
+            "Advanced Idioms & Collocations",
+            "Academic & Formal Writing Grammar",
+            "Discourse Markers (however, therefore, moreover)"
+        ],
+        "question_type": ["fill_up", "MCQ", "True False"],
+        "level": ["easy", "medium", "hard"]
+    }
+]
