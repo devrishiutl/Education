@@ -19,7 +19,11 @@ async def verify_phone(phone: VerifyPhone):
         raise HTTPException(400, "User already exists")
     otp = str(random.randint(100000, 999999))
     expires_at = datetime.utcnow() + timedelta(minutes=5)
-    await db.otps.insert_one({"phone": phone.phone, "otp": otp, "expires_at": expires_at, "verified": False})
+    existing = await db.otps.find_one({"phone": phone.phone})
+    if existing:
+        await db.otps.update_one({"phone": phone.phone}, {"$set": {"otp": otp, "expires_at": expires_at, "verified": False}})
+    else:
+        await db.otps.insert_one({"phone": phone.phone, "otp": otp, "expires_at": expires_at, "verified": False})
     return {"message": f"OTP sent to {phone.phone}", "otp": otp}  # remove otp in production
 
 # Register
