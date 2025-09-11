@@ -32,7 +32,7 @@ class MongoDBClient:
             cls._instance.client = MongoClient(
                 cls._instance.mongo_uri,
                 server_api=ServerApi('1'),
-                tls=False,
+                tls=True,
                 tlsAllowInvalidCertificates=True,
                 tlsAllowInvalidHostnames=True,
                 retryWrites=True,
