@@ -42,7 +42,15 @@ logging.getLogger().handlers[0].setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.mongodb_client = MongoDBClient()
+    try:
+        yield
+    finally:
+        app.state.mongodb_client.close_connection()
+
+app = FastAPI(lifespan=lifespan)
 # app.include_router(router)
 # Add CORS middleware
 app.add_middleware(
@@ -69,15 +77,7 @@ class StoryGeneratorRequest(BaseModel):
 #     print("Closing MongoDB connection...")
 #     mongodb_client.close_connection()  # close on app shutdown
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    app.state.mongodb_client = MongoDBClient()
-    try:
-        yield
-    finally:
-        app.state.mongodb_client.close_connection()
 
-app = FastAPI(lifespan=lifespan)
 # ==================== STORY GENERATOR ENDPOINTS ====================
 
 app.include_router(auth.router)

@@ -64,7 +64,9 @@ async def register(user: UserRegister, otp: OTPVerify):
     "last_active": datetime.utcnow()
     })
     token = create_access_token(str(result.inserted_id))
-    return {"message": "User registered successfully", "token": token}
+    del user_dict["password_hash"]
+    del user_dict["_id"]
+    return {"message": "User registered successfully", "token": token, "user": user_dict}
 
 # Login
 @router.post("/login")
