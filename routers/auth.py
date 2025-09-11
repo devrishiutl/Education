@@ -87,12 +87,12 @@ async def login(user: UserLogin):
     
     # ✅ Create JWT token
     token = create_access_token(str(existing["_id"]))
-    
+    del existing["password_hash"]
+    del existing["_id"]
     return {
         "message": "Login successful",
-        "user_id": str(existing["_id"]),
-        "access_token": token,
-        "token_type": "bearer"
+        "token": token,
+        "user": existing
     }
 
 # Send OTP
