@@ -1,0 +1,9 @@
+
+
+for file in /Users/devrishibhardwaj/Downloads/images/class4/**/*.pdf(.N); do
+  echo "Uploading: $file"
+  curl --silent --output /dev/null --write-out "Status: %{http_code}\n" \
+    --location 'http://localhost:8000/api/education/word-meaning-generator' \
+    --form "files=@$file" \
+    --form 'standard="4"'
+done

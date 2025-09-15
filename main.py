@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 from grammar_question_answer import app_graph, CurriculumEntry
 from fastapi import Body
 from routers import auth, profile, dashboard, vocabulary, grammar, reading, writing, speaking
+from unseen_passage_generator import app_graph as unseen_passage_generator, PassageRequest
 # from routes import router
 
 from fastapi import FastAPI
@@ -170,6 +171,21 @@ async def generate_all(curriculum: List[CurriculumEntry] = Body(...)):
             status_code=500,
             detail=f"Failed to generate grammar questions: {str(e)}"
         )
+
+@app.post("/api/education/generate_passage")
+async def generate_passage_endpoint(request: PassageRequest):
+    try:
+        state = {
+            "standard": request.standard,
+            "topic": request.topic,
+            "difficulty": request.difficulty,
+            "length": request.length
+        }
+        result = await unseen_passage_generator.ainvoke(state)
+        return {"status": "success", "data": result}
+    except Exception as e:
+        logger.error(str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
