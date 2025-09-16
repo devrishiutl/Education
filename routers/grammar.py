@@ -24,7 +24,7 @@ async def verify_answer(answer: GrammarAnswer, user_id: str = Depends(get_curren
     question = await db.grammar_questions.find_one({"_id": ObjectId(answer.question_id)})
     if not question:
         raise HTTPException(404, "Question not found")
-    is_correct = question["answer"] == answer.answer
+    is_correct = question["answer"].lower().strip() == answer.answer.lower().strip()
     # Save user answer
     await db.grammar_answers.insert_one({
         "user_id": ObjectId(user_id),

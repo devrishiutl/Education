@@ -60,10 +60,12 @@ class ReadingAnswer(BaseModel):
 
 class WritingAnswer(BaseModel):
     topic_id: str
-    answer_text: str
+    your_answer: str
 
 class WritingTopicIn(BaseModel):
     category: str = Field(..., description="Category e.g. letter/article/notice")
     title: str = Field(..., description="Title of the writing topic")
-    context: str = Field(..., description="Detailed context for writing")
+    description: str = Field(..., description="Detailed context for writing")
     standard: int = Field(..., description="Grade/standard")
+    difficulty: str = Field(..., description="Difficulty level")
+    guidelines: list[str] = Field(..., description="Guidelines for writing")
