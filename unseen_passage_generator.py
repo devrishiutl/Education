@@ -36,7 +36,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 # -------------------------
 class PassageRequest(BaseModel):
     standard: int
-    topic: str
+    title: str
     difficulty: str
     length: str = "medium"  # short | medium | long
 
@@ -49,14 +49,14 @@ class Question(BaseModel):
     explanation: str
 
 
-class PassageRecord(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    standard: int
-    topic: str
-    difficulty: str
-    passage: str
-    questions: List[Question]
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+# class PassageRecord(BaseModel):
+#     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+#     standard: int
+#     topic: str
+#     difficulty: str
+#     passage: str
+#     questions: List[Question]
+#     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 # -------------------------
@@ -104,7 +104,7 @@ Question types must include:
 # -------------------------
 class State(dict):
     standard: int
-    topic: str
+    title: str
     difficulty: str
     length: str
     passage_data: Dict
@@ -114,7 +114,7 @@ class State(dict):
 # Generator Node
 # -------------------------
 def generate_passage(state: State):
-    prompt = build_passage_prompt(state["standard"], state["topic"], state["difficulty"], state["length"])
+    prompt = build_passage_prompt(state["standard"], state["title"], state["difficulty"], state["length"])
 
     response = openai_client.chat.completions.create(
         model=OPENAI_MODEL,
@@ -147,7 +147,7 @@ def save_to_mongo(state: State):
     record = {
         "passage_id": str(uuid.uuid4()),
         "standard": state["standard"],
-        "topic": state["topic"],
+        "title": state["title"],
         "difficulty": state["difficulty"],
         "passage": data["passage"],
         "questions": [
@@ -167,6 +167,7 @@ def save_to_mongo(state: State):
     app.state.mongodb_client.insert_documents("reading_passages", [record])
 
     return state
+    # return record
 
 
 # -------------------------

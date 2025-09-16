@@ -19,3 +19,19 @@ class AllFunctions:
         embedding1 = self.get_embedding(text1)
         embedding2 = self.get_embedding(text2)
         return self.semantic_similarity(embedding1, embedding2)
+    
+    async def paginate(self, collection, query, projection, page: int, page_size: int):
+        skip = (page - 1) * page_size
+        cursor = collection.find(query, projection).skip(skip).limit(page_size)
+
+        results = []
+        async for doc in cursor:
+            results.append(doc)
+
+        total = await collection.count_documents(query)
+        return {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "results": results
+        }

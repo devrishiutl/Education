@@ -177,7 +177,7 @@ async def generate_passage_endpoint(request: PassageRequest):
     try:
         state = {
             "standard": request.standard,
-            "topic": request.topic,
+            "title": request.title,
             "difficulty": request.difficulty,
             "length": request.length
         }
