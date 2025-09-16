@@ -6,6 +6,7 @@ from bson import ObjectId
 from datetime import datetime
 from utils.jwt import get_current_user
 import uuid
+import json
 
 
 router = APIRouter(prefix="/writing", tags=["Writing"])
@@ -26,8 +27,10 @@ async def add_topic(topic: WritingTopicIn):
         "topic_id": str(uuid.uuid4()),  # generate UUID
         "category": topic.category,
         "title": topic.title,
-        "context": topic.context,
+        "description": topic.description,
         "standard": topic.standard,
+        "difficulty": topic.difficulty,
+        "guidelines": topic.guidelines,
         "created_at": datetime.utcnow()
     }
 
@@ -36,19 +39,76 @@ async def add_topic(topic: WritingTopicIn):
     return topic_doc
 
 # Submit writing
+# @router.post("/verify")
+# async def submit_writing(answer: WritingAnswer, user_id: str = Depends(get_current_user)):
+#     # Example: simple scoring
+#     score = min(len(answer.your_answer.split()) / 10, 10)  # 10 points max
+#     feedback = "Good job" if score > 5 else "Needs improvement"
+#     await db.writing_answers.insert_one({
+#         "user_id": user_id,
+#         "topic_id": answer.topic_id,
+#         "your_answer": answer.your_answer,
+#         "score": score,
+#         "feedback": feedback,
+#         "submitted_at": datetime.utcnow()
+#     })
+#     return {"topic_id": answer.topic_id, "score": score, "feedback": feedback}
+
+
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI()
+
 @router.post("/verify")
 async def submit_writing(answer: WritingAnswer, user_id: str = Depends(get_current_user)):
-    # Example: simple scoring
-    score = min(len(answer.answer_text.split()) / 10, 10)  # 10 points max
-    feedback = "Good job" if score > 5 else "Needs improvement"
+    # 🔍 Find the topic
+    topic = await db.writing_topics.find_one({"topic_id": answer.topic_id})
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    # 🧠 Use LLM for scoring + feedback
+    prompt = f"""
+You are an English writing evaluator.  
+The topic details are:
+Category: {topic['category']}
+Title: {topic['title']}
+Description: {topic['description']}
+Standard: {topic['standard']}
+Difficulty: {topic['difficulty']}
+Guidelines: {topic.get('guidelines', 'None')}
+
+Student's answer:
+{answer.your_answer}
+
+Tasks:
+1. Score the answer from 0 to 10 based on relevance, clarity, grammar, structure, and adherence to guidelines.  
+2. Give feedback highlighting strengths and areas for improvement.  
+3. Provide a well-written example answer for this topic.
+Return JSON with keys: score, feedback, example_answer.
+"""
+
+    llm_response = await client.chat.completions.create(
+        model="gpt-4o-mini",  # or "gpt-4o" if you want best quality
+        messages=[{"role": "user", "content": prompt}],
+        response_format={ "type": "json_object" }
+    )
+
+    evaluation = llm_response.choices[0].message.content
+    evaluation = json.loads(evaluation)  # parse JSON
+
+
+    # 💾 Save to DB
     await db.writing_answers.insert_one({
         "user_id": user_id,
         "topic_id": answer.topic_id,
-        "answer_text": answer.answer_text,
-        "score": score,
-        "feedback": feedback,
+        "your_answer": answer.your_answer,
+        "score": evaluation["score"],
+        "feedback": evaluation["feedback"],
+        "example_answer": evaluation["example_answer"],
         "submitted_at": datetime.utcnow()
     })
-    return {"topic_id": answer.topic_id, "score": score, "feedback": feedback}
+
+    return evaluation
+
 
 

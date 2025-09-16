@@ -51,8 +51,9 @@ async def get_stories(passage_id: str):
     cursor = db.reading_passages.find({"passage_id":passage_id})
     async for s in cursor:
         s["_id"] = str(s["_id"])
-        # for q in s["questions"]:
-        #     q["question_id"] = str(q["question_id"])
+        for q in s["questions"]:
+            del q["answer"]
+            del q["explanation"]
         stories.append(s)
     return stories
 
@@ -64,23 +65,19 @@ async def verify_reading(answer: ReadingAnswer, user_id: str = Depends(get_curre
     if not story:
         raise HTTPException(404, "Story not found")
     results = []
-    results1 = []
     for ans in answer.answers:
         question = next((q for q in story["questions"] if str(q["question_id"]) == ans.question_id), None)
         # if AllFunctions().get_similarity_score(question["answer"], ans.answer) > 0.75:
         #     is_correct = True
         # else:
         #     is_correct = False
-        is_correct = question and question["answer"] == ans.answer
-        results.append({"question_id": ans.question_id, "correct": is_correct, "question": question["question"], "answer": ans.answer, "correct_answer": question["answer"], "explanation": question["explanation"]})
-        results1.append({"question_id": ans.question_id, "correct": is_correct, "answer": ans.answer})
-
+        is_correct = question and question["answer"].lower().strip() == ans.answer.lower().strip()
+        results.append({"question_id": ans.question_id, "correct": is_correct, "question": question["question"], "your_answer": ans.answer, "correct_answer": question["answer"], "explanation": question["explanation"]})
 
     # Save user answers
     await db.reading_answers.insert_one({
         "user_id": ObjectId(user_id),
-        # "story_id": ObjectId(answer.story_id),
         "story_id": answer.story_id,
-        "answers": results1       
+        "answers": [{"question_id": r["question_id"], "correct": r["correct"], "your_answer": r["your_answer"]} for r in results]       
     })
     return results
