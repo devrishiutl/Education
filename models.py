@@ -1,5 +1,5 @@
 # models.py
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 from pydantic_core import core_schema
@@ -62,3 +62,8 @@ class WritingAnswer(BaseModel):
     topic_id: str
     answer_text: str
 
+class WritingTopicIn(BaseModel):
+    category: str = Field(..., description="Category e.g. letter/article/notice")
+    title: str = Field(..., description="Title of the writing topic")
+    context: str = Field(..., description="Detailed context for writing")
+    standard: int = Field(..., description="Grade/standard")

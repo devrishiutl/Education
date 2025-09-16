@@ -64,6 +64,7 @@ async def verify_reading(answer: ReadingAnswer, user_id: str = Depends(get_curre
     if not story:
         raise HTTPException(404, "Story not found")
     results = []
+    results1 = []
     for ans in answer.answers:
         question = next((q for q in story["questions"] if str(q["question_id"]) == ans.question_id), None)
         # if AllFunctions().get_similarity_score(question["answer"], ans.answer) > 0.75:
@@ -71,12 +72,15 @@ async def verify_reading(answer: ReadingAnswer, user_id: str = Depends(get_curre
         # else:
         #     is_correct = False
         is_correct = question and question["answer"] == ans.answer
-        results.append({"question_id": ans.question_id, "correct": is_correct})
+        results.append({"question_id": ans.question_id, "correct": is_correct, "question": question["question"], "answer": ans.answer, "correct_answer": question["answer"], "explanation": question["explanation"]})
+        results1.append({"question_id": ans.question_id, "correct": is_correct, "answer": ans.answer})
+
+
     # Save user answers
     await db.reading_answers.insert_one({
         "user_id": ObjectId(user_id),
         # "story_id": ObjectId(answer.story_id),
         "story_id": answer.story_id,
-        "answers": results
+        "answers": results1       
     })
     return results
