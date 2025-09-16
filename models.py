@@ -68,4 +68,5 @@ class WritingTopicIn(BaseModel):
     description: str = Field(..., description="Detailed context for writing")
     standard: int = Field(..., description="Grade/standard")
     difficulty: str = Field(..., description="Difficulty level")
+    audience: str = Field(..., description="Audience of the writing topic")
     guidelines: list[str] = Field(..., description="Guidelines for writing")

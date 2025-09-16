@@ -30,6 +30,7 @@ async def add_topic(topic: WritingTopicIn):
         "description": topic.description,
         "standard": topic.standard,
         "difficulty": topic.difficulty,
+        "audience": topic.audience,
         "guidelines": topic.guidelines,
         "created_at": datetime.utcnow()
     }
@@ -75,6 +76,7 @@ Title: {topic['title']}
 Description: {topic['description']}
 Standard: {topic['standard']}
 Difficulty: {topic['difficulty']}
+Audience: {topic['audience']}
 Guidelines: {topic.get('guidelines', 'None')}
 
 Student's answer:
