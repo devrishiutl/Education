@@ -7,19 +7,22 @@ from datetime import datetime
 from utils.jwt import get_current_user
 import uuid
 import json
+from utils.allFunctions import AllFunctions
 
 
 router = APIRouter(prefix="/writing", tags=["Writing"])
 
 # Get writing topics
 @router.get("/topics")
-async def get_topics():
-    topics = []
-    cursor = db.writing_topics.find()
-    async for t in cursor:
-        t["_id"] = str(t["_id"])
-        topics.append(t)
-    return topics
+async def get_topics(category: str, page: int, page_size: int):
+    data = await AllFunctions().paginate(
+        db.writing_topics,
+        {"category": category},
+        {"_id": 0, "topic_id": 1, "category": 1, "title": 1, "description": 1, "standard": 1, "difficulty": 1, "audience": 1, "guidelines": 1},
+        page,
+        page_size
+    )
+    return data
 
 @router.post("/topics")
 async def add_topic(topic: WritingTopicIn):
