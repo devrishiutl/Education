@@ -14,7 +14,7 @@ async def get_vocabulary(page: int, page_size: int, user_id: str = Depends(get_c
     return await AllFunctions().paginate(
         db.vocabulary,
         {},
-        {"_id": 0, "word": 1, "meaning": 1, "where_to_use": 1, "example": 1},
+        {"_id": 0, "word": 1, "meaning": 1, "when_to_use": 1, "example": 1},
         page,
         page_size
     )
