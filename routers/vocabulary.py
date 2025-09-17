@@ -3,18 +3,31 @@ from fastapi import APIRouter, HTTPException, Depends
 from database import db
 from bson import ObjectId
 from utils.jwt import get_current_user
+from utils.allFunctions import AllFunctions
 
 router = APIRouter(prefix="/vocabulary", tags=["Vocabulary"])
 
 # Get all vocabulary
 @router.get("/")
-async def get_vocabulary(user_id: str = Depends(get_current_user)):
+async def get_vocabulary(page: int, page_size: int, user_id: str = Depends(get_current_user)):
     vocab = []
-    cursor = db.vocabulary.find()
-    async for v in cursor:
-        v["_id"] = str(v["_id"])
-        vocab.append(v)
-    return vocab
+    return await AllFunctions().paginate(
+        db.vocabulary,
+        {},
+        {"_id": 0, "word": 1, "meaning": 1, "where_to_use": 1, "example": 1},
+        page,
+        page_size
+    )
+
+# # Get all vocabulary
+# @router.get("/")
+# async def get_vocabulary(user_id: str = Depends(get_current_user)):
+#     vocab = []
+#     cursor = db.vocabulary.find()
+#     async for v in cursor:
+#         v["_id"] = str(v["_id"])
+#         vocab.append(v)
+#     return vocab
 
 # # Add new word
 # @router.post("/")
