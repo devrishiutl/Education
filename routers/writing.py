@@ -8,17 +8,7 @@ from utils.jwt import get_current_user
 import uuid
 import json
 from utils.allFunctions import AllFunctions
-from typing import List
-from pydantic import BaseModel
 
-class Feedback(BaseModel):
-    strengths: List[str]
-    areas_for_improvement: List[str]
-
-class Evaluation(BaseModel):
-    score: int
-    feedback: Feedback
-    example_answer: str
 
 router = APIRouter(prefix="/writing", tags=["Writing"])
 
@@ -73,59 +63,6 @@ from openai import AsyncOpenAI
 
 client = AsyncOpenAI()
 
-# @router.post("/verify")
-# async def submit_writing(answer: WritingAnswer, user_id: str = Depends(get_current_user)):
-#     # 🔍 Find the topic
-#     topic = await db.writing_topics.find_one({"topic_id": answer.topic_id})
-#     if not topic:
-#         raise HTTPException(status_code=404, detail="Topic not found")
-
-#     # 🧠 Use LLM for scoring + feedback
-#     prompt = f"""
-# You are an English writing evaluator.  
-# The topic details are:
-# Category: {topic['category']}
-# Title: {topic['title']}
-# Description: {topic['description']}
-# Standard: {topic['standard']}
-# Difficulty: {topic['difficulty']}
-# Audience: {topic['audience']}
-# Guidelines: {topic.get('guidelines', 'None')}
-
-# Student's answer:
-# {answer.your_answer}
-
-# Tasks:
-# 1. Score the answer from 0 to 10 based on relevance, clarity, grammar, structure, and adherence to guidelines.  
-# 2. Give feedback highlighting strengths and areas for improvement.  
-# 3. Provide a well-written example answer for this topic.
-# Return JSON with keys: score, feedback, example_answer.
-# """
-
-#     llm_response = await client.chat.completions.create(
-#         model="gpt-4o-mini",  # or "gpt-4o" if you want best quality
-#         messages=[{"role": "user", "content": prompt}],
-#         response_format={ "type": "json_object" }
-#     )
-
-#     evaluation = llm_response.choices[0].message.content
-#     evaluation = json.loads(evaluation)  # parse JSON
-
-
-#     # 💾 Save to DB
-#     await db.writing_answers.insert_one({
-#         "user_id": user_id,
-#         "topic_id": answer.topic_id,
-#         "your_answer": answer.your_answer,
-#         "score": evaluation["score"],
-#         "feedback": evaluation["feedback"],
-#         "example_answer": evaluation["example_answer"],
-#         "submitted_at": datetime.utcnow()
-#     })
-
-#     return evaluation
-
-
 @router.post("/verify")
 async def submit_writing(answer: WritingAnswer, user_id: str = Depends(get_current_user)):
     # 🔍 Find the topic
@@ -133,7 +70,7 @@ async def submit_writing(answer: WritingAnswer, user_id: str = Depends(get_curre
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
 
-    # 🧠 Prompt
+    # 🧠 Use LLM for scoring + feedback
     prompt = f"""
 You are an English writing evaluator.  
 The topic details are:
@@ -150,47 +87,33 @@ Student's answer:
 
 Tasks:
 1. Score the answer from 0 to 10 based on relevance, clarity, grammar, structure, and adherence to guidelines.  
-2. Give feedback with two lists:
-   - strengths: list of 3 positive points
-   - areas_for_improvement: list of 3 improvement points  
-3. Provide a well-written example answer.  
-
-Return JSON in this structure:
-{{
-  "score": 0-10,
-  "feedback": {{
-    "strengths": ["...","...","..."],
-    "areas_for_improvement": ["...","...","..."]
-  }},
-  "example_answer": "..."
-}}
+2. Give feedback highlighting strengths and areas for improvement.  
+3. Provide a well-written example answer for this topic.
+Return JSON with keys: score, feedback, example_answer.
 """
 
     llm_response = await client.chat.completions.create(
-        model="gpt-4o-mini",  
+        model="gpt-4o-mini",  # or "gpt-4o" if you want best quality
         messages=[{"role": "user", "content": prompt}],
         response_format={ "type": "json_object" }
     )
 
-    try:
-        evaluation = Evaluation.parse_raw(llm_response.choices[0].message.content)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Invalid JSON from LLM: {e}")
+    evaluation = llm_response.choices[0].message.content
+    evaluation = json.loads(evaluation)  # parse JSON
 
-    # 💾 Save in DB with required format
-    record = {
+
+    # 💾 Save to DB
+    await db.writing_answers.insert_one({
         "user_id": user_id,
         "topic_id": answer.topic_id,
         "your_answer": answer.your_answer,
-        "score": evaluation.score,
-        "feedback": evaluation.feedback.dict(),  # nested object
-        "example_answer": evaluation.example_answer,
+        "score": evaluation["score"],
+        "feedback": evaluation["feedback"],
+        "example_answer": evaluation["example_answer"],
         "submitted_at": datetime.utcnow()
-    }
+    })
 
-    await db.writing_answers.insert_one(record)
-
-    return record
+    return evaluation
 
 
 

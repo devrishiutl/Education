@@ -47,14 +47,8 @@ class UserLogin(BaseModel):
     password: str
 
 class EditProfile(BaseModel):
-    email: Optional[EmailStr] = None
-    phone: Optional[PhoneNumber] = None
-    standard: Optional[str] = None
-    school: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    # name: Optional[str]
-    # phone_or_email: Optional[str]
+    name: Optional[str]
+    phone_or_email: Optional[str]
 
 class GrammarAnswer(BaseModel):
     question_id: str
