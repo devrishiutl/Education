@@ -189,6 +189,7 @@ Return JSON in this structure:
     }
 
     await db.writing_answers.insert_one(record)
+    del record["_id"]
 
     return record
 
