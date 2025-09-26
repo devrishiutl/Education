@@ -1,10 +1,12 @@
 # routers/reading.py
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from database import db
 from models import ReadingAnswer
 from bson import ObjectId
 from utils.jwt import get_current_user
 from utils.allFunctions import AllFunctions
+from typing import Optional
+
 router = APIRouter(prefix="/reading", tags=["Reading"])
 
 # Get stories
@@ -28,12 +30,19 @@ router = APIRouter(prefix="/reading", tags=["Reading"])
 #         stories.append(s)
 #     return stories
 
-@router.get("/stories")
-async def get_stories_list(page: int, page_size: int):
+@router.get("/passages")
+async def get_passages_list(page: int, page_size: int,  difficulty: Optional[str] = Query(None),
+    level: Optional[str] = Query(None)):
+      # Build dynamic query
+    query = {}
+    if difficulty:
+        query["difficulty"] = difficulty
+    if level:
+        query["level"] = level
     data = await AllFunctions().paginate(
         db.reading_passages,
-        {},
-        {"_id": 0, "passage_id": 1, "standard": 1, "title": 1, "difficulty": 1, "passage": 1},
+        query,
+        {"_id": 0,"questions": 0,"standard":0, "created_at": 0},
         page,
         page_size
     )
