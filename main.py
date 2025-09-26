@@ -1,4 +1,6 @@
-from fastapi import FastAPI, HTTPException
+import tempfile
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from mistralai import Mistral
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -20,6 +22,7 @@ from grammar_question_answer import app_graph, CurriculumEntry
 from fastapi import Body
 from routers import auth, profile, dashboard, vocabulary, grammar, reading, writing, speaking
 from unseen_passage_generator import app_graph as unseen_passage_generator, PassageRequest
+import test
 # from routes import router
 
 from fastapi import FastAPI
@@ -178,6 +181,7 @@ async def generate_passage_endpoint(request: PassageRequest):
         state = {
             "standard": request.standard,
             "title": request.title,
+            "level": request.level,
             "difficulty": request.difficulty,
             "length": request.length
         }
@@ -187,5 +191,10 @@ async def generate_passage_endpoint(request: PassageRequest):
         logger.error(str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+import test1
+app.include_router(test.router)
+app.include_router(test1.router)
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8004, reload=True)

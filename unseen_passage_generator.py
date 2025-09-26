@@ -37,6 +37,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 class PassageRequest(BaseModel):
     standard: int
     title: str
+    level: str
     difficulty: str
     length: str = "medium"  # short | medium | long
 
@@ -62,12 +63,13 @@ class Question(BaseModel):
 # -------------------------
 # Prompt Builder
 # -------------------------
-def build_passage_prompt(standard: int, topic: str, difficulty: str, length: str) -> str:
+def build_passage_prompt(standard: int, topic: str, level: str, difficulty: str, length: str) -> str:
     return f"""
 You are an expert educational content creator.  
 Generate ONE unseen reading comprehension passage for Standard {standard} students.  
 
 Topic: {topic}  
+Level: {level}  
 Difficulty: {difficulty}  
 Length: {length} (about 250–350 words).  
 
@@ -105,6 +107,7 @@ Question types must include:
 class State(dict):
     standard: int
     title: str
+    level: str
     difficulty: str
     length: str
     passage_data: Dict
@@ -114,7 +117,7 @@ class State(dict):
 # Generator Node
 # -------------------------
 def generate_passage(state: State):
-    prompt = build_passage_prompt(state["standard"], state["title"], state["difficulty"], state["length"])
+    prompt = build_passage_prompt(state["standard"], state["title"], state["level"], state["difficulty"], state["length"])
 
     response = openai_client.chat.completions.create(
         model=OPENAI_MODEL,
@@ -148,6 +151,7 @@ def save_to_mongo(state: State):
         "passage_id": str(uuid.uuid4()),
         "standard": state["standard"],
         "title": state["title"],
+        "level": state["level"],
         "difficulty": state["difficulty"],
         "passage": data["passage"],
         "questions": [

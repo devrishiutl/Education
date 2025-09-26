@@ -81,3 +81,90 @@ async def verify_reading(answer: ReadingAnswer, user_id: str = Depends(get_curre
         "answers": [{"question_id": r["question_id"], "correct": r["correct"], "your_answer": r["your_answer"]} for r in results]       
     })
     return results
+
+
+
+
+
+from pydantic import BaseModel
+from typing import List, Tuple
+
+class TimestampedChunk(BaseModel):
+    text: str
+    timestamp: float  # could be end_time of the chunk
+
+class SpeechTestInput(BaseModel):
+    story_id: str
+    reference_text: str
+    reader_chunks: List[TimestampedChunk]  # frontend sends chunked text with timestamp
+
+class SpeechScore(BaseModel):
+    pronunciation_score: float
+    fluency_score: float
+    punctuation_score: float
+
+class SpeechTestResult(BaseModel):
+    score: SpeechScore
+
+# Constants
+DELTA = 0.3
+BETA = 0.2
+EXPECTED_GAP = 0.5
+
+# Pronunciation: check word-by-word accuracy
+def calculate_pronunciation(chunks, reference_text):
+    ref_words = reference_text.strip().split()
+    spoken_words = []
+    for chunk in chunks:
+        spoken_words.extend(chunk.text.strip().split())
+    correct = sum(1 for s, r in zip(spoken_words, ref_words) if s.lower() == r.lower())
+    return correct / len(ref_words) if ref_words else 0.0
+
+# Fluency: timing difference between chunks
+def calculate_fluency(chunks):
+    if len(chunks) < 2:
+        return 1.0
+    total_deviation = 0
+    for i in range(len(chunks)-1):
+        gap = chunks[i+1].timestamp - chunks[i].timestamp
+        deviation = max(0, abs(gap - EXPECTED_GAP) - DELTA)
+        total_deviation += deviation
+    total_expected = (len(chunks)-1) * EXPECTED_GAP
+    return max(0.0, 1 - total_deviation / total_expected)
+
+# Punctuation: check pauses at punctuation positions
+def calculate_punctuation(chunks, reference_text):
+    punct_positions = [i for i, c in enumerate(reference_text) if c in ".!?,"]
+    if not punct_positions:
+        return 1.0
+    correct_pauses = 0
+    # map chunks to words sequentially
+    word_idx = 0
+    chunk_idx = 0
+    ref_words = reference_text.strip().split()
+    while chunk_idx < len(chunks) and word_idx < len(ref_words):
+        chunk_words = chunks[chunk_idx].text.strip().split()
+        for i, w in enumerate(chunk_words):
+            if word_idx in punct_positions:
+                # check pause before next chunk
+                if chunk_idx + 1 < len(chunks):
+                    gap = chunks[chunk_idx+1].timestamp - chunks[chunk_idx].timestamp
+                    if gap >= DELTA + BETA:
+                        correct_pauses += 1
+            word_idx += 1
+        chunk_idx += 1
+    return correct_pauses / len(punct_positions)
+
+@router.post("/evaluate_chunks", response_model=SpeechTestResult)
+async def evaluate_speech_chunks(data: SpeechTestInput, user_id: str = Depends(get_current_user)):
+    pronunciation = calculate_pronunciation(data.reader_chunks, data.reference_text)
+    fluency = calculate_fluency(data.reader_chunks)
+    punctuation = calculate_punctuation(data.reader_chunks, data.reference_text)
+
+    return {
+        "score": {
+            "pronunciation_score": round(pronunciation, 2),
+            "fluency_score": round(fluency, 2),
+            "punctuation_score": round(punctuation, 2)
+        }
+    }
