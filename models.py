@@ -4,17 +4,20 @@ from typing import Optional, List
 from datetime import datetime
 from pydantic_core import core_schema
 
+
+## Auth
+
+
 class PhoneNumber:
     @classmethod
     def __get_pydantic_core_schema__(cls, _source_type, _handler):
         return core_schema.no_info_after_validator_function(
-            cls.validate,
-            core_schema.str_schema()  # treat as string for OpenAPI
+            cls.validate, core_schema.str_schema()  # treat as string for OpenAPI
         )
 
     @classmethod
     def validate(cls, v):
-         # Try to convert to int (in case it's str like "9876543210")
+        # Try to convert to int (in case it's str like "9876543210")
         try:
             v1 = int(v)
         except (TypeError, ValueError):
@@ -25,8 +28,10 @@ class PhoneNumber:
 
         return v
 
+
 class VerifyPhone(BaseModel):
     phone: PhoneNumber
+
 
 class UserRegister(BaseModel):
     name: str
@@ -38,13 +43,16 @@ class UserRegister(BaseModel):
     city: str
     state: str
 
+
 class OTPVerify(BaseModel):
     phone: Optional[PhoneNumber] = None
     otp: str
 
+
 class UserLogin(BaseModel):
     phone_or_email: str
     password: str
+
 
 class EditProfile(BaseModel):
     email: Optional[EmailStr] = None
@@ -56,17 +64,38 @@ class EditProfile(BaseModel):
     # name: Optional[str]
     # phone_or_email: Optional[str]
 
+
+# Reading
+
+
 class GrammarAnswer(BaseModel):
     question_id: str
     answer: str
+
 
 class ReadingAnswer(BaseModel):
     story_id: str
     answers: List[GrammarAnswer]  # same format
 
+
+class AudioSegment(BaseModel):
+    text: str
+    startTime: float
+    endTime: float
+
+
+class ReadingEvaluation(BaseModel):
+    passage_id: str
+    audio_data: List[AudioSegment]
+
+
+# Writing
+
+
 class WritingAnswer(BaseModel):
     topic_id: str
     your_answer: str
+
 
 class WritingTopicIn(BaseModel):
     category: str = Field(..., description="Category e.g. letter/article/notice")
