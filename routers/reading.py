@@ -183,8 +183,8 @@ async def evaluate_reading_skills_internal(passage, audio_data):
             + consistency_result["score"]
         )
 
-        # Generate feedback
-        feedback = generate_feedback(
+        # Generate section-wise feedback
+        feedback = generate_section_feedback(
             accuracy_result, fluency_result, consistency_result, total_score
         )
 
@@ -198,7 +198,7 @@ async def evaluate_reading_skills_internal(passage, audio_data):
             "detailedMetrics": {
                 "accuracy": f"{accuracy_result['correct_words']}/{accuracy_result['total_words']} words correct ({accuracy_result['accuracy_percentage']:.1f}%)",
                 "fluency": f"{fluency_result['words_per_minute']:.0f} words per minute",
-                "consistency": f"Pacing variation: {consistency_result['consistency']:.3f}s",  # New metric
+                "consistency": f"Pacing variation: {consistency_result['consistency']:.3f}s",
             },
             "feedback": feedback,
         }
@@ -211,13 +211,18 @@ def get_empty_evaluation_result(message):
     """Return empty result for error cases"""
     return {
         "score": 0.0,
-        "scoreBreakdown": {"accuracy": 0.0, "fluency": 0.0, "pronunciation": 0.0},
+        "scoreBreakdown": {"accuracy": 0.0, "fluency": 0.0, "consistency": 0.0},
         "detailedMetrics": {
             "accuracy": "0/0 words correct (0%)",
             "fluency": "0 words per minute",
             "consistency": "Pacing variation: 0s",
         },
-        "feedback": [message],
+        "feedback": {
+            "accuracy": [message],
+            "fluency": [message],
+            "consistency": [message],
+            "overall": [message],
+        },
         "level": "Needs Practice",
     }
 
@@ -388,48 +393,115 @@ def evaluate_consistency(audio_data):
         return {"score": 0, "consistency": 0}
 
 
-def generate_feedback(accuracy, fluency, consistency, total_score):
-    """Generate personalized feedback"""
-    feedback = []
+def generate_section_feedback(accuracy, fluency, consistency, total_score):
+    """Generate section-wise personalized feedback"""
+
+    feedback = {"accuracy": [], "fluency": [], "consistency": [], "overall": []}
 
     # Accuracy feedback
     if accuracy["score"] >= 3.5:
-        feedback.append("Excellent word accuracy! You read almost all words correctly.")
+        feedback["accuracy"].append(
+            "🎯 Excellent word accuracy! You read almost all words correctly."
+        )
+        feedback["accuracy"].append(
+            "Your pronunciation of individual words is very clear and precise."
+        )
     elif accuracy["score"] >= 2.5:
-        feedback.append(
-            "Good word accuracy. Practice difficult words to improve further."
+        feedback["accuracy"].append(
+            "✅ Good word accuracy. You read most words correctly."
+        )
+        feedback["accuracy"].append(
+            "Practice a few difficult words to reach excellence."
+        )
+    elif accuracy["score"] >= 1.5:
+        feedback["accuracy"].append(
+            "📝 Fair accuracy. Focus on reading each word carefully."
+        )
+        feedback["accuracy"].append(
+            "Try reading slowly and paying attention to each word's pronunciation."
         )
     else:
-        feedback.append(
-            "Focus on reading words accurately. Practice reading slowly and clearly."
+        feedback["accuracy"].append("🔍 Needs improvement in word accuracy.")
+        feedback["accuracy"].append(
+            "Practice reading slowly and clearly, focusing on one word at a time."
         )
 
     # Fluency feedback
-    if fluency["wpm_score"] >= 1.5 and fluency["pause_score"] >= 1.5:
-        feedback.append("Great fluency! Your reading pace and flow are excellent.")
-    elif fluency["words_per_minute"] < 80:
-        feedback.append(
-            "Try to read a bit faster. Aim for a more natural speaking pace."
+    if fluency["score"] >= 3.5:
+        feedback["fluency"].append(
+            "🚀 Excellent fluency! Your reading pace is perfect."
         )
-    elif fluency["words_per_minute"] > 150:
-        feedback.append("Good speed, but try to slow down slightly for better clarity.")
-    elif fluency["average_pause"] > 1.0:
-        feedback.append("Work on reducing pauses between phrases for better flow.")
-
-    # consistency feedback
-    if consistency["score"] >= 1.5:
-        feedback.append("Good speech consistency and confidence!")
+        feedback["fluency"].append(
+            "You maintain a natural flow with appropriate pauses."
+        )
+    elif fluency["score"] >= 2.5:
+        if fluency["words_per_minute"] < 80:
+            feedback["fluency"].append(
+                "📊 Good fluency, but try to increase your reading speed slightly."
+            )
+            feedback["fluency"].append(
+                "Aim for 80-120 words per minute for natural speech."
+            )
+        elif fluency["words_per_minute"] > 150:
+            feedback["fluency"].append(
+                "📊 Good fluency, but try to slow down slightly for better clarity."
+            )
+            feedback["fluency"].append(
+                "A more moderate pace will improve comprehension."
+            )
+        else:
+            feedback["fluency"].append("📊 Good fluency with reasonable pace and flow.")
+    elif fluency["score"] >= 1.5:
+        feedback["fluency"].append("⏱️ Your reading pace needs improvement.")
+        if fluency["average_pause"] > 1.0:
+            feedback["fluency"].append("Work on reducing long pauses between phrases.")
+        feedback["fluency"].append("Practice reading aloud regularly to build fluency.")
     else:
-        feedback.append("Work on speaking more consistently.")
+        feedback["fluency"].append("💤 Fluency needs significant improvement.")
+        feedback["fluency"].append(
+            "Focus on reading in phrases rather than word-by-word."
+        )
+
+    # Consistency feedback
+    if consistency["score"] >= 1.5:
+        feedback["consistency"].append("🎵 Excellent pacing consistency!")
+        feedback["consistency"].append(
+            "You maintain a steady, rhythmic pace throughout your reading."
+        )
+    elif consistency["score"] >= 1.0:
+        feedback["consistency"].append("📈 Good pacing consistency.")
+        feedback["consistency"].append(
+            "Try to make your speech rhythm more even across all words."
+        )
+    elif consistency["score"] >= 0.5:
+        feedback["consistency"].append("⚖️ Some inconsistency in pacing detected.")
+        feedback["consistency"].append(
+            "Avoid rushing through some words and dragging others."
+        )
+        feedback["consistency"].append(
+            "Practice with a metronome to develop steady rhythm."
+        )
+    else:
+        feedback["consistency"].append("🔄 Pacing is very inconsistent.")
+        feedback["consistency"].append("Focus on speaking at a more consistent speed.")
+        feedback["consistency"].append("Record yourself and listen for uneven pacing.")
 
     # Overall encouragement
     if total_score >= 8:
-        feedback.append("Outstanding reading performance! Keep up the great work!")
-    elif total_score >= 6:
-        feedback.append("Good job! With regular practice, you'll continue to improve.")
-    else:
-        feedback.append(
-            "Keep practicing regularly. Focus on one area at a time for steady improvement."
+        feedback["overall"].append("🏆 Outstanding reading performance!")
+        feedback["overall"].append(
+            "You demonstrate excellent reading skills across all areas."
         )
+    elif total_score >= 6:
+        feedback["overall"].append("👍 Good job! Solid reading performance.")
+        feedback["overall"].append("With regular practice, you'll continue to improve.")
+    elif total_score >= 4:
+        feedback["overall"].append("💪 Making good progress!")
+        feedback["overall"].append(
+            "Focus on one area at a time for steady improvement."
+        )
+    else:
+        feedback["overall"].append("🌱 Keep practicing regularly!")
+        feedback["overall"].append("Reading aloud daily will help build your skills.")
 
     return feedback
