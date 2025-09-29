@@ -201,7 +201,6 @@ async def evaluate_reading_skills_internal(passage, audio_data):
                 "consistency": f"Pacing variation: {consistency_result['consistency']:.3f}s",  # New metric
             },
             "feedback": feedback,
-            "level": get_performance_level(total_score),
         }
 
     except Exception as e:
@@ -434,17 +433,3 @@ def generate_feedback(accuracy, fluency, consistency, total_score):
         )
 
     return feedback
-
-
-def get_performance_level(score):
-    """Get performance level based on score"""
-    if score >= 9:
-        return "Excellent"
-    elif score >= 7.5:
-        return "Very Good"
-    elif score >= 6:
-        return "Good"
-    elif score >= 4.5:
-        return "Satisfactory"
-    else:
-        return "Needs Practice"
