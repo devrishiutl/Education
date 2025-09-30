@@ -31,6 +31,7 @@ if not OPENAI_API_KEY:
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
+
 # -------------------------
 # Pydantic Schemas
 # -------------------------
@@ -63,7 +64,9 @@ class Question(BaseModel):
 # -------------------------
 # Prompt Builder
 # -------------------------
-def build_passage_prompt(standard: int, topic: str, level: str, difficulty: str, length: str) -> str:
+def build_passage_prompt(
+    standard: int, topic: str, level: str, difficulty: str, length: str
+) -> str:
     return f"""
 You are an expert educational content creator.  
 Generate ONE unseen reading comprehension passage for Standard {standard} students.  
@@ -72,6 +75,10 @@ Topic: {topic}
 Level: {level}  
 Difficulty: {difficulty}  
 Length: {length} (about 250–350 words).  
+
+The passage text must be written in **Markdown** format.  
+**Do not include a title or heading** at the top of the passage.  
+You may include bold, italics, or bullet points if appropriate.  
 
 Then create exactly 5 comprehension questions.  
 Question types must include:  
@@ -83,7 +90,7 @@ Question types must include:
 
 ### Output JSON Format (STRICT)
 {{
-  "passage": "Full passage text here",
+  "passage": "Markdown formatted passage text here (without any title)",
   "questions": [
     {{
       "question": "What ...?",
@@ -98,6 +105,7 @@ Question types must include:
 - Ensure each question has exactly one correct `answer`.  
 - Keep `options` realistic if multiple-choice.  
 - All answers must be factually consistent with the passage.  
+- The `passage` field must **retain Markdown formatting** when displayed.
 """
 
 
@@ -117,13 +125,19 @@ class State(dict):
 # Generator Node
 # -------------------------
 def generate_passage(state: State):
-    prompt = build_passage_prompt(state["standard"], state["title"], state["level"], state["difficulty"], state["length"])
+    prompt = build_passage_prompt(
+        state["standard"],
+        state["title"],
+        state["level"],
+        state["difficulty"],
+        state["length"],
+    )
 
     response = openai_client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
-        response_format={"type": "json_object"}
+        response_format={"type": "json_object"},
     )
 
     content = response.choices[0].message.content.strip()
@@ -160,14 +174,15 @@ def save_to_mongo(state: State):
                 "question": q["question"],
                 "options": q.get("options", []),
                 "answer": q["answer"],
-                "explanation": q.get("explanation", "")
+                "explanation": q.get("explanation", ""),
             }
             for q in data["questions"]
         ],
-        "created_at": datetime.utcnow()
+        "created_at": datetime.utcnow(),
     }
 
     from main import app
+
     app.state.mongodb_client.insert_documents("reading_passages", [record])
 
     return state
