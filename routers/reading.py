@@ -102,8 +102,6 @@ async def get_passages(passage_id: str, user_id: str = Depends(get_current_user)
         return passage
 
     except Exception as e:
-        # Log error if you have a logger (recommended in production)
-        # logger.exception("Error while fetching passage")
 
         return JSONResponse(
             status_code=500,

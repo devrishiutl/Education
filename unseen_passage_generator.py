@@ -76,9 +76,9 @@ Level: {level}
 Difficulty: {difficulty}  
 Length: {length} (about 250–350 words).  
 
-The passage text must be written in **Markdown** format.  
+Always return the passage text in only **Markdown** format  
 **Do not include a title or heading** at the top of the passage.  
-You may include bold, italics, or bullet points if appropriate.  
+You must include bold, italics, or bullet points in case to emphsize on relevant content.  
 
 Then create exactly 5 comprehension questions.  
 Question types must include:  
