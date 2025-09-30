@@ -6,6 +6,7 @@ from bson import ObjectId
 from utils.jwt import get_current_user
 from utils.allFunctions import AllFunctions
 from typing import List, Optional
+from fastapi.responses import JSONResponse
 import math
 import re
 
@@ -18,22 +19,46 @@ async def get_passages_list(
     page_size: int,
     difficulty: Optional[List[str]] = Query(None),
     level: Optional[List[str]] = Query(None),
+    status: Optional[str] = Query(None),
+    user_id: Optional[str] = Depends(get_current_user),
 ):
-    # Build dynamic query for MongoDB
+    # Build base query
     query = {}
 
-    if difficulty:
-        if len(difficulty) == 1:
-            query["difficulty"] = difficulty[0]  # single value
-        else:
-            query["difficulty"] = {"$in": difficulty}  # multiple values
+    # Helper function for array fields
+    def build_array_query(field_name, values):
+        if values:
+            query[field_name] = values[0] if len(values) == 1 else {"$in": values}
 
-    if level:
-        if len(level) == 1:
-            query["level"] = level[0]
-        else:
-            query["level"] = {"$in": level}
+    build_array_query("difficulty", difficulty)
+    build_array_query("level", level)
 
+    # Initialize passage_ids_solved
+    passage_ids_solved = set()
+
+    # Fetch solved passages if status filtering is required or user_id exists
+    if user_id:
+        # Fetch solved passage IDs once
+        solved = db.reading_evaluations.find(
+            {"user_id": ObjectId(user_id)}, {"passage_id": 1}
+        )
+        passage_ids_solved = {doc["passage_id"] async for doc in solved}
+
+        if status == "solved":
+            if not passage_ids_solved:
+                return empty_response(page, page_size)
+            query["passage_id"] = {"$in": list(passage_ids_solved)}
+        elif status == "unsolved":
+            # Get all passage IDs
+            all_passage_ids = db.reading_passages.find({}, {"passage_id": 1})
+            all_passage_ids = {doc["passage_id"] async for doc in all_passage_ids}
+            unsolved_ids = all_passage_ids - passage_ids_solved
+
+            if not unsolved_ids:
+                return empty_response(page, page_size)
+            query["passage_id"] = {"$in": list(unsolved_ids)}
+
+    # Get paginated data
     data = await AllFunctions().paginate(
         db.reading_passages,
         query,
@@ -42,24 +67,48 @@ async def get_passages_list(
         page_size,
     )
 
-    # modify passage preview
-    for s in data["results"]:
-        s["passage"] = s["passage"][:300] + "...."
+    # Add solved status and modify passage preview
+    for passage in data["results"]:
+        passage_id = passage.get("passage_id")
+        passage["solved"] = user_id and passage_id in passage_ids_solved
+        passage["passage"] = passage["passage"][:300] + "...."
 
     return data
 
 
-@router.get("/stories/{passage_id}")
-async def get_stories(passage_id: str):
-    stories = []
-    cursor = db.reading_passages.find({"passage_id": passage_id})
-    async for s in cursor:
-        s["_id"] = str(s["_id"])
-        for q in s["questions"]:
-            del q["answer"]
-            del q["explanation"]
-        stories.append(s)
-    return stories
+@router.get("/passages/{passage_id}")
+async def get_passages(passage_id: str, user_id: str = Depends(get_current_user)):
+    try:
+        # Fetch passage (only one expected per passage_id)
+        passage = await db.reading_passages.find_one(
+            {"passage_id": passage_id},
+            {"_id": 0, "questions": 0, "standard": 0, "created_at": 0},
+        )
+        if not passage:
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Passage not found"},
+            )
+
+        # Check if passage is solved by this user
+        solved = await db.reading_evaluations.find_one(
+            {"user_id": ObjectId(user_id), "passage_id": passage_id},
+            {"evaluation_data": 1},  # projection
+        )
+
+        passage["solved"] = bool(solved)
+        passage["evaluation_data"] = solved.get("evaluation_data") if solved else None
+
+        return passage
+
+    except Exception as e:
+        # Log error if you have a logger (recommended in production)
+        # logger.exception("Error while fetching passage")
+
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"An error occurred: {str(e)}"},
+        )
 
 
 # Verify reading answers
@@ -505,3 +554,13 @@ def generate_section_feedback(accuracy, fluency, consistency, total_score):
         feedback["overall"].append("Reading aloud daily will help build your skills.")
 
     return feedback
+
+
+def empty_response(page: int, page_size: int) -> dict:
+    """Return empty paginated response"""
+    return {
+        "results": [],
+        "total": 0,
+        "page": page,
+        "page_size": page_size,
+    }
