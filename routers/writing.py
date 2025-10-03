@@ -121,7 +121,10 @@ async def submit_writing(
     # 🔍 Find the topic
     topic = await db.writing_topics.find_one({"topic_id": answer.topic_id})
     if not topic:
-        raise HTTPException(status_code=404, detail="Topic not found")
+        return JSONResponse(
+            status_code=404,
+            content={"message": "Topic not found"},
+        )
 
     # 🧠 Prompt
     prompt = f"""
@@ -165,7 +168,10 @@ Return JSON in this structure:
     try:
         evaluation = Evaluation.parse_raw(llm_response.choices[0].message.content)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Invalid JSON from LLM: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"An error occurred: {str(e)}"},
+        )
 
     # 💾 Save in DB with required format
     record = {
@@ -178,7 +184,13 @@ Return JSON in this structure:
         "submitted_at": datetime.utcnow(),
     }
 
-    await db.writing_answers.insert_one(record)
-    del record["_id"]
+    await db.writing_evaluations.insert_one(record)
 
-    return record
+    response_data = {
+        "your_answer": record["your_answer"],
+        "score": record["score"],
+        "feedback": record["feedback"],
+        "example_answer": record["example_answer"],
+    }
+
+    return response_data
