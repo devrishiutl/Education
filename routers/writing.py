@@ -92,17 +92,17 @@ async def get_topic(topic_id: str, user_id: str = Depends(get_current_user)):
         if not topic:
             return JSONResponse(
                 status_code=404,
-                content={"message": "Passage not found"},
+                content={"message": "Topic not found"},
             )
 
-        # Check if passage is solved by this user
-        # solved = await db.reading_evaluations.find_one(
-        #     {"user_id": ObjectId(user_id), "topic": topic},
-        #     {"evaluation_data": 1},  # projection
-        # )
+        ## Check if topic is solved by this user
+        solved = await db.writing_evaluations.find_one(
+            {"user_id": user_id, "topic_id": topic_id},
+            {"evaluation_data": 1},  # projection
+        )
 
-        # topic["solved"] = bool(solved)
-        # topic["evaluation_data"] = solved.get("evaluation_data") if solved else None
+        topic["solved"] = bool(solved)
+        topic["evaluation_data"] = solved.get("evaluation_data") if solved else None
 
         return topic
 
@@ -173,24 +173,21 @@ Return JSON in this structure:
             content={"message": f"An error occurred: {str(e)}"},
         )
 
+    evaluation_data = {
+        "your_answer": answer.your_answer,
+        "score": evaluation.score,
+        "feedback": evaluation.feedback.dict(),
+        "example_answer": evaluation.example_answer,
+    }
+
     # 💾 Save in DB with required format
     record = {
         "user_id": user_id,
         "topic_id": answer.topic_id,
-        "your_answer": answer.your_answer,
-        "score": evaluation.score,
-        "feedback": evaluation.feedback.dict(),  # nested object
-        "example_answer": evaluation.example_answer,
+        "evaluation_data": evaluation_data,
         "submitted_at": datetime.utcnow(),
     }
 
     await db.writing_evaluations.insert_one(record)
 
-    response_data = {
-        "your_answer": record["your_answer"],
-        "score": record["score"],
-        "feedback": record["feedback"],
-        "example_answer": record["example_answer"],
-    }
-
-    return response_data
+    return evaluation_data
