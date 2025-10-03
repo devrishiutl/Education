@@ -84,7 +84,7 @@ async def add_topic(topic: WritingTopicIn):
 @router.get("/topics/{topic_id}")
 async def get_topic(topic_id: str, user_id: str = Depends(get_current_user)):
     try:
-        # Fetch passage (only one expected per passage_id)
+        # Fetch topic (only one expected per topic_id)
         topic = await db.writing_topics.find_one(
             {"topic_id": topic_id},
             {"_id": 0, "standard": 0, "audience": 0, "created_at": 0},
