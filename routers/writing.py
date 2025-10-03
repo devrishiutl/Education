@@ -1,38 +1,65 @@
 # routers/writing.py
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from database import db
 from models import WritingAnswer, WritingTopicIn
 from bson import ObjectId
 from datetime import datetime
 from utils.jwt import get_current_user
 import uuid
-import json
 from utils.allFunctions import AllFunctions
 from typing import List
 from pydantic import BaseModel
+from typing import List, Optional
+from fastapi.responses import JSONResponse
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI()
+
 
 class Feedback(BaseModel):
     strengths: List[str]
     areas_for_improvement: List[str]
+
 
 class Evaluation(BaseModel):
     score: int
     feedback: Feedback
     example_answer: str
 
+
 router = APIRouter(prefix="/writing", tags=["Writing"])
+
 
 # Get writing topics
 @router.get("/topics")
-async def get_topics(category: str, page: int, page_size: int):
+async def get_topics(
+    page: int,
+    page_size: int,
+    difficulty: Optional[List[str]] = Query(None),
+    level: Optional[List[str]] = Query(None),
+    status: Optional[str] = Query(None),
+    user_id: Optional[str] = Depends(get_current_user),
+):
+    # Build base query
+    query = {}
+
+    # Helper function for array fields
+    def build_array_query(field_name, values):
+        if values:
+            query[field_name] = values[0] if len(values) == 1 else {"$in": values}
+
+    build_array_query("difficulty", difficulty)
+    build_array_query("level", level)
+
     data = await AllFunctions().paginate(
         db.writing_topics,
-        {"category": category},
-        {"_id": 0, "topic_id": 1, "category": 1, "title": 1, "description": 1, "standard": 1, "difficulty": 1, "audience": 1, "guidelines": 1},
+        query,
+        {"_id": 0, "standard": 0, "audience": 0, "created_at": 0},
         page,
-        page_size
+        page_size,
     )
     return data
+
 
 @router.post("/topics")
 async def add_topic(topic: WritingTopicIn):
@@ -45,89 +72,52 @@ async def add_topic(topic: WritingTopicIn):
         "difficulty": topic.difficulty,
         "audience": topic.audience,
         "guidelines": topic.guidelines,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.utcnow(),
     }
 
     result = await db.writing_topics.insert_one(topic_doc)
     topic_doc["_id"] = str(result.inserted_id)  # return string for JSON
     return topic_doc
 
-# Submit writing
-# @router.post("/verify")
-# async def submit_writing(answer: WritingAnswer, user_id: str = Depends(get_current_user)):
-#     # Example: simple scoring
-#     score = min(len(answer.your_answer.split()) / 10, 10)  # 10 points max
-#     feedback = "Good job" if score > 5 else "Needs improvement"
-#     await db.writing_answers.insert_one({
-#         "user_id": user_id,
-#         "topic_id": answer.topic_id,
-#         "your_answer": answer.your_answer,
-#         "score": score,
-#         "feedback": feedback,
-#         "submitted_at": datetime.utcnow()
-#     })
-#     return {"topic_id": answer.topic_id, "score": score, "feedback": feedback}
 
+# Get writing topics
+@router.get("/topics/{topic_id}")
+async def get_topic(topic_id: str, user_id: str = Depends(get_current_user)):
+    try:
+        # Fetch passage (only one expected per passage_id)
+        topic = await db.writing_topics.find_one(
+            {"topic_id": topic_id},
+            {"_id": 0, "standard": 0, "audience": 0, "created_at": 0},
+        )
+        if not topic:
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Passage not found"},
+            )
 
-from openai import AsyncOpenAI
+        # Check if passage is solved by this user
+        # solved = await db.reading_evaluations.find_one(
+        #     {"user_id": ObjectId(user_id), "topic": topic},
+        #     {"evaluation_data": 1},  # projection
+        # )
 
-client = AsyncOpenAI()
+        # topic["solved"] = bool(solved)
+        # topic["evaluation_data"] = solved.get("evaluation_data") if solved else None
 
-# @router.post("/verify")
-# async def submit_writing(answer: WritingAnswer, user_id: str = Depends(get_current_user)):
-#     # 🔍 Find the topic
-#     topic = await db.writing_topics.find_one({"topic_id": answer.topic_id})
-#     if not topic:
-#         raise HTTPException(status_code=404, detail="Topic not found")
+        return topic
 
-#     # 🧠 Use LLM for scoring + feedback
-#     prompt = f"""
-# You are an English writing evaluator.  
-# The topic details are:
-# Category: {topic['category']}
-# Title: {topic['title']}
-# Description: {topic['description']}
-# Standard: {topic['standard']}
-# Difficulty: {topic['difficulty']}
-# Audience: {topic['audience']}
-# Guidelines: {topic.get('guidelines', 'None')}
+    except Exception as e:
 
-# Student's answer:
-# {answer.your_answer}
-
-# Tasks:
-# 1. Score the answer from 0 to 10 based on relevance, clarity, grammar, structure, and adherence to guidelines.  
-# 2. Give feedback highlighting strengths and areas for improvement.  
-# 3. Provide a well-written example answer for this topic.
-# Return JSON with keys: score, feedback, example_answer.
-# """
-
-#     llm_response = await client.chat.completions.create(
-#         model="gpt-4o-mini",  # or "gpt-4o" if you want best quality
-#         messages=[{"role": "user", "content": prompt}],
-#         response_format={ "type": "json_object" }
-#     )
-
-#     evaluation = llm_response.choices[0].message.content
-#     evaluation = json.loads(evaluation)  # parse JSON
-
-
-#     # 💾 Save to DB
-#     await db.writing_answers.insert_one({
-#         "user_id": user_id,
-#         "topic_id": answer.topic_id,
-#         "your_answer": answer.your_answer,
-#         "score": evaluation["score"],
-#         "feedback": evaluation["feedback"],
-#         "example_answer": evaluation["example_answer"],
-#         "submitted_at": datetime.utcnow()
-#     })
-
-#     return evaluation
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"An error occurred: {str(e)}"},
+        )
 
 
 @router.post("/verify")
-async def submit_writing(answer: WritingAnswer, user_id: str = Depends(get_current_user)):
+async def submit_writing(
+    answer: WritingAnswer, user_id: str = Depends(get_current_user)
+):
     # 🔍 Find the topic
     topic = await db.writing_topics.find_one({"topic_id": answer.topic_id})
     if not topic:
@@ -167,9 +157,9 @@ Return JSON in this structure:
 """
 
     llm_response = await client.chat.completions.create(
-        model="gpt-4o-mini",  
+        model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
-        response_format={ "type": "json_object" }
+        response_format={"type": "json_object"},
     )
 
     try:
@@ -185,13 +175,10 @@ Return JSON in this structure:
         "score": evaluation.score,
         "feedback": evaluation.feedback.dict(),  # nested object
         "example_answer": evaluation.example_answer,
-        "submitted_at": datetime.utcnow()
+        "submitted_at": datetime.utcnow(),
     }
 
     await db.writing_answers.insert_one(record)
     del record["_id"]
 
     return record
-
-
-
