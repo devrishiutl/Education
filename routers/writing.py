@@ -110,9 +110,8 @@ async def add_topic(topic: WritingTopicIn):
         "category": topic.category,
         "title": topic.title,
         "description": topic.description,
-        "standard": topic.standard,
         "difficulty": topic.difficulty,
-        "audience": topic.audience,
+        "level": topic.level,
         "guidelines": topic.guidelines,
         "created_at": datetime.utcnow(),
     }
