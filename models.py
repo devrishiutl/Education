@@ -104,3 +104,13 @@ class WritingTopicIn(BaseModel):
     level: str = Field(..., description="Level of the writing topic")
     difficulty: str = Field(..., description="Difficulty level")
     guidelines: list[str] = Field(..., description="Guidelines for writing")
+
+
+# Speaking
+
+
+class SpeakingTopic(BaseModel):
+    title: str = Field(..., description="Title of the speaking topic")
+    description: str = Field(..., description="Detailed context for speaking")
+    level: str = Field(..., description="Level of the speaking topic")
+    difficulty: str = Field(..., description="Difficulty level")

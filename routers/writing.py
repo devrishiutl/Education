@@ -200,8 +200,7 @@ async def add_topic(topic: WritingTopicIn):
     }
 
     result = await db.writing_topics.insert_one(topic_doc)
-    topic_doc["_id"] = str(result.inserted_id)  # return string for JSON
-    return topic_doc
+    return {**topic_doc, "_id": str(result.inserted_id)}
 
 
 # Get writing topics
