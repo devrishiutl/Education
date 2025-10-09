@@ -17,63 +17,147 @@ router = APIRouter(prefix="/reading", tags=["Reading"])
 async def get_passages_list(
     page: int,
     page_size: int,
-    difficulty: Optional[List[str]] = Query(None),
-    level: Optional[List[str]] = Query(None),
+    level_beginner: Optional[str] = Query(None, alias="level.beginner"),
+    level_intermediate: Optional[str] = Query(None, alias="level.intermediate"),
+    level_advanced: Optional[str] = Query(None, alias="level.advanced"),
     status: Optional[str] = Query(None),
     user_id: Optional[str] = Depends(get_current_user),
 ):
-    # Build base query
-    query = {}
+    try:
+        # Build base query with AND relationship
+        query = {}
+        conditions = []  # List to hold all filter conditions
+        # Parse comma-separated level-difficulty combinations
+        level_filters = []
 
-    # Helper function for array fields
-    def build_array_query(field_name, values):
-        if values:
-            query[field_name] = values[0] if len(values) == 1 else {"$in": values}
+        if level_beginner:
+            difficulties = [
+                d.lower().strip() for d in level_beginner.split(",")
+            ]  # Convert to lowercase and trim
+            level_filters.append(
+                {"level": "beginner", "difficulty": {"$in": difficulties}}
+            )
 
-    build_array_query("difficulty", difficulty)
-    build_array_query("level", level)
+        if level_intermediate:
+            difficulties = [
+                d.lower().strip() for d in level_intermediate.split(",")
+            ]  # Convert to lowercase and trim
+            level_filters.append(
+                {"level": "intermediate", "difficulty": {"$in": difficulties}}
+            )
 
-    # Initialize passage_ids_solved
-    passage_ids_solved = set()
+        if level_advanced:
+            difficulties = [
+                d.lower().strip() for d in level_advanced.split(",")
+            ]  # Convert to lowercase and trim
+            level_filters.append(
+                {"level": "advanced", "difficulty": {"$in": difficulties}}
+            )
 
-    # Fetch solved passages if status filtering is required or user_id exists
-    if user_id:
-        # Fetch solved passage IDs once
-        solved = db.reading_evaluations.find(
-            {"user_id": ObjectId(user_id)}, {"passage_id": 1}
+        # Add level filters to conditions
+        if level_filters:
+            if len(level_filters) == 1:
+                # Single level - add directly to conditions
+                conditions.append(level_filters[0])
+            else:
+                # Multiple levels - use OR within levels, but AND with other filters
+                conditions.append({"$or": level_filters})
+
+        # Parse comma-separated status
+        if status:
+            status_list = [
+                s.strip() for s in status.split(",")
+            ]  # Clean up status values
+            # Only proceed if we have a user_id for status filtering
+            if user_id:
+                passage_ids_solved = set()
+                solved = db.reading_evaluations.find(
+                    {"user_id": ObjectId(user_id)}, {"passage_id": 1}
+                )
+                passage_ids_solved = {doc["passage_id"] async for doc in solved}
+
+                status_conditions = []
+                has_solved = "solved" in status_list
+                has_unsolved = "unsolved" in status_list
+
+                # Handle status combinations
+                if has_solved and has_unsolved:
+                    # Show all passages (no passage_id filter needed)
+                    pass
+                elif has_solved:
+                    if passage_ids_solved:
+                        status_conditions.append(
+                            {"passage_id": {"$in": list(passage_ids_solved)}}
+                        )
+                    else:
+                        # No solved passages and only solved filter requested
+                        return empty_response(page, page_size)
+                elif has_unsolved:
+                    if passage_ids_solved:
+                        status_conditions.append(
+                            {"passage_id": {"$nin": list(passage_ids_solved)}}
+                        )
+                    # If no solved passages, all are unsolved (no filter needed)
+
+                # Add status conditions to main conditions
+                if status_conditions:
+                    if len(status_conditions) == 1:
+                        conditions.append(status_conditions[0])
+                    else:
+                        conditions.append({"$or": status_conditions})
+            else:
+                # If no user_id but status filter is provided, we can't determine solved status
+                # So we ignore status filter for anonymous users
+                pass
+
+        # Build final query with AND relationship
+        if conditions:
+            if len(conditions) == 1:
+                query = conditions[0]
+            else:
+                query["$and"] = conditions
+
+        # Get paginated passages
+        data = await AllFunctions().paginate(
+            db.reading_passages,
+            query,
+            {
+                "_id": 0,
+                "questions": 0,
+                "standard": 0,
+                "created_at": 0,
+            },
+            page,
+            page_size,
         )
-        passage_ids_solved = {doc["passage_id"] async for doc in solved}
 
-        if status == "solved":
-            if not passage_ids_solved:
-                return empty_response(page, page_size)
-            query["passage_id"] = {"$in": list(passage_ids_solved)}
-        elif status == "unsolved":
-            # Get all passage IDs
-            all_passage_ids = db.reading_passages.find({}, {"passage_id": 1})
-            all_passage_ids = {doc["passage_id"] async for doc in all_passage_ids}
-            unsolved_ids = all_passage_ids - passage_ids_solved
+        # Add solved status field if user is logged in
+        if user_id:
+            # Reuse the solved passages we already fetched, or fetch if not available
+            if "passage_ids_solved" not in locals():
+                passage_ids_solved = set()
+                solved = db.reading_evaluations.find(
+                    {"user_id": ObjectId(user_id)}, {"passage_id": 1}
+                )
+                passage_ids_solved = {doc["passage_id"] async for doc in solved}
 
-            if not unsolved_ids:
-                return empty_response(page, page_size)
-            query["passage_id"] = {"$in": list(unsolved_ids)}
+            for passage in data["results"]:
+                passage_id = passage.get("passage_id")
+                passage["solved"] = passage_id in passage_ids_solved
+                passage["passage"] = passage["passage"][:300] + "...."
+        else:
+            # For anonymous users, mark all as unsolved
+            for passage in data["results"]:
+                passage["solved"] = False
+                passage["passage"] = passage["passage"][:300] + "...."
 
-    # Get paginated data
-    data = await AllFunctions().paginate(
-        db.reading_passages,
-        query,
-        {"_id": 0, "questions": 0, "standard": 0, "created_at": 0},
-        page,
-        page_size,
-    )
+        return data
 
-    # Add solved status and modify passage preview
-    for passage in data["results"]:
-        passage_id = passage.get("passage_id")
-        passage["solved"] = user_id and passage_id in passage_ids_solved
-        passage["passage"] = passage["passage"][:300] + "...."
-
-    return data
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Server Error: {str(e)}"},
+        )
 
 
 @router.get("/passages/{passage_id}")

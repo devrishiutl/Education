@@ -114,3 +114,37 @@ class SpeakingTopic(BaseModel):
     description: str = Field(..., description="Detailed context for speaking")
     level: str = Field(..., description="Level of the speaking topic")
     difficulty: str = Field(..., description="Difficulty level")
+
+
+class TranscriptionSegment(BaseModel):
+    text: str
+    startTime: float
+    endTime: float
+
+
+class SpeakingVerificationRequest(BaseModel):
+    topic_id: str
+    transcription: List[TranscriptionSegment]
+
+
+class SpeakingFeedback(BaseModel):
+    strengths: List[str]
+    areas_for_improvement: List[str]
+
+
+class SpeakingLLMEvaluation(BaseModel):
+    fluency_score: float = Field(
+        ..., ge=0, le=10, description="Fluency score out of 10"
+    )
+    pronunciation_score: float = Field(
+        ..., ge=0, le=10, description="Pronunciation score out of 10"
+    )
+    content_relevance_score: float = Field(
+        ..., ge=0, le=10, description="Content relevance score out of 10"
+    )
+    overall_score: float = Field(
+        ..., ge=0, le=10, description="Overall speaking score out of 10"
+    )
+    feedback: SpeakingFeedback
+    detailed_feedback: str = Field(..., description="Detailed feedback for improvement")
+    example_response: str = Field(..., description="Example response for the topic")

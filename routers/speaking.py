@@ -1,17 +1,21 @@
 # routers/speaking.py
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, Query
 from database import db
-from models import SpeakingTopic
-from bson import ObjectId
+from models import (
+    SpeakingTopic,
+    SpeakingVerificationRequest,
+    SpeakingLLMEvaluation,
+)
 from datetime import datetime
 from utils.jwt import get_current_user
 import uuid
 from utils.allFunctions import AllFunctions
-from typing import List
-from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
+
+# Initialize OpenAI client
+client = AsyncOpenAI()
 
 router = APIRouter(prefix="/speaking", tags=["Speaking"])
 
@@ -75,7 +79,7 @@ async def get_topics(
             # Only proceed if we have a user_id for status filtering
             if user_id:
                 topic_ids_solved = set()
-                solved = db.writing_evaluations.find(
+                solved = db.speaking_evaluations.find(
                     {"user_id": user_id}, {"topic_id": 1}
                 )
                 topic_ids_solved = {doc["topic_id"] async for doc in solved}
@@ -123,7 +127,7 @@ async def get_topics(
 
         # Get paginated topics
         data = await AllFunctions().paginate(
-            db.writing_topics,
+            db.speaking_topics,
             query,
             {
                 "_id": 0,
@@ -138,7 +142,7 @@ async def get_topics(
             # Reuse the solved topics we already fetched, or fetch if not available
             if "topic_ids_solved" not in locals():
                 topic_ids_solved = set()
-                solved = db.writing_evaluations.find(
+                solved = db.speaking_evaluations.find(
                     {"user_id": user_id}, {"topic_id": 1}
                 )
                 topic_ids_solved = {doc["topic_id"] async for doc in solved}
@@ -173,6 +177,147 @@ async def add_topic(topic: SpeakingTopic):
 
     result = await db.speaking_topics.insert_one(topic_doc)
     return {**topic_doc, "_id": str(result.inserted_id)}
+
+
+# Get speaking topics
+@router.get("/topics/{topic_id}")
+async def get_topic(topic_id: str, user_id: str = Depends(get_current_user)):
+    try:
+        # Fetch topic (only one expected per topic_id)
+        topic = await db.speaking_topics.find_one(
+            {"topic_id": topic_id},
+            {"_id": 0, "created_at": 0},
+        )
+        if not topic:
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Topic not found"},
+            )
+
+        ## Check if topic is solved by this user
+        solved = await db.speaking_evaluations.find_one(
+            {"user_id": user_id, "topic_id": topic_id},
+            {"evaluation_data": 1},  # projection
+        )
+
+        topic["solved"] = bool(solved)
+        topic["evaluation_data"] = solved.get("evaluation_data") if solved else None
+
+        return topic
+
+    except Exception as e:
+
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"An error occurred: {str(e)}"},
+        )
+
+
+@router.post("/verify")
+async def verify_speaking(
+    request: SpeakingVerificationRequest, user_id: str = Depends(get_current_user)
+):
+    """
+    Evaluate speaking skills based on transcription data using LLM
+    """
+    try:
+        # Verify topic exists
+        topic = await db.speaking_topics.find_one(
+            {"topic_id": request.topic_id}, {"_id": 0, "created_at": 0}
+        )
+
+        if not topic:
+            return JSONResponse(status_code=404, content={"message": "Topic not found"})
+
+        # Combine transcription text
+        full_text = " ".join([segment.text for segment in request.transcription])
+
+        # Calculate speaking metrics
+        total_time = max([segment.endTime for segment in request.transcription]) - min(
+            [segment.startTime for segment in request.transcription]
+        )
+        word_count = len(full_text.split())
+        wpm = (word_count / total_time) * 60 if total_time > 0 else 0
+
+        # Build LLM evaluation prompt
+        prompt = f"""
+You are an expert English speaking skills evaluator. Evaluate the student's speaking performance based on the transcription data.
+
+Topic Details:
+Title: {topic.get('title', 'N/A')}
+Description: {topic.get('description', 'N/A')}
+Level: {topic.get('level', 'N/A')}
+Difficulty: {topic.get('difficulty', 'N/A')}
+
+Student's Spoken Response:
+"{full_text}"
+
+Speaking Metrics:
+- Words per minute: {wpm:.1f}
+- Total speaking time: {total_time:.1f} seconds
+- Word count: {word_count}
+
+Evaluation Criteria:
+1. Fluency (0-10): Speaking pace, rhythm, natural flow, pauses
+2. Pronunciation (0-10): Clarity, accuracy of sounds, word stress
+3. Content Relevance (0-10): How well the response addresses the topic
+4. Overall Score (0-10): Overall speaking performance
+
+Tasks:
+1. Score each criterion from 0 to 10
+2. Provide detailed feedback explaining the scores
+3. List 3 strengths and 3 areas for improvement
+4. Provide an example response for this topic
+
+Return JSON in this exact structure:
+{{
+  "fluency_score": 0-10,
+  "pronunciation_score": 0-10,
+  "content_relevance_score": 0-10,
+  "overall_score": 0-10,
+  "feedback": {{
+    "strengths": ["strength1", "strength2", "strength3"],
+    "areas_for_improvement": ["improvement1", "improvement2", "improvement3"]
+  }},
+  "detailed_feedback": "Detailed explanation of the evaluation...",
+  "example_response": "Example response for this topic..."
+}}
+"""
+
+        # Call OpenAI model
+        llm_response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+
+        # Parse response safely
+        try:
+            content = llm_response.choices[0].message.content
+            evaluation = SpeakingLLMEvaluation.parse_raw(content)
+        except Exception as e:
+            return JSONResponse(
+                status_code=500,
+                content={"message": "Invalid response format from evaluator."},
+            )
+
+        # Store evaluation in database
+        evaluation_doc = {
+            "user_id": user_id,
+            "topic_id": request.topic_id,
+            "evaluation_data": evaluation.dict(),
+            "transcription": [segment.dict() for segment in request.transcription],
+        }
+
+        await db.speaking_evaluations.insert_one(evaluation_doc)
+
+        return evaluation
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"An error occurred during evaluation: {str(e)}"},
+        )
 
 
 def empty_response(page: int, page_size: int) -> dict:
