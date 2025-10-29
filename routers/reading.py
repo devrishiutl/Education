@@ -9,6 +9,7 @@ from typing import List, Optional
 from fastapi.responses import JSONResponse
 import math
 import re
+from datetime import datetime
 
 router = APIRouter(prefix="/reading", tags=["Reading"])
 
@@ -21,10 +22,145 @@ async def get_passages_list(
     level_intermediate: Optional[str] = Query(None, alias="level.intermediate"),
     level_advanced: Optional[str] = Query(None, alias="level.advanced"),
     status: Optional[str] = Query(None),
+    ai_decide: Optional[bool] = Query(
+        False, description="Let AI pick the best passage"
+    ),
     user_id: Optional[str] = Depends(get_current_user),
 ):
     try:
-        # Build base query with AND relationship
+        if ai_decide:
+            if not user_id:
+                return JSONResponse(
+                    status_code=400,
+                    content={"message": "Login required for AI decision"},
+                )
+
+            # Fetch user's latest submissions
+            submissions = (
+                await db.reading_evaluations.find({"user_id": user_id})
+                .sort("submitted_at", -1)
+                .to_list(10)
+            )
+
+            # 🟢 New user → start at Beginner Easy
+            if not submissions:
+                passage = await db.reading_passages.aggregate(
+                    [
+                        {"$match": {"level": "beginner", "difficulty": "easy"}},
+                        {"$sample": {"size": 1}},
+                        {"$project": {"_id": 0}},
+                    ]
+                ).to_list(1)
+                return {"passage_id": passage[0]["passage_id"]}
+
+            # Compute global average score
+            avg_score = sum(
+                s["evaluation_data"].get("score", 0) for s in submissions
+            ) / len(submissions)
+            RSI = avg_score / 10
+
+            # Get last passage details
+            last_passage_id = submissions[0]["passage_id"]
+            last_passage = await db.reading_passages.find_one(
+                {"passage_id": last_passage_id}, {"level": 1, "difficulty": 1}
+            )
+
+            levels = ["beginner", "intermediate", "advanced"]
+            difficulties = ["easy", "medium", "hard"]
+
+            if not last_passage:
+                level, difficulty = "beginner", "easy"
+            else:
+                level = last_passage["level"]
+                difficulty = last_passage["difficulty"]
+
+            level_index = levels.index(level)
+            diff_index = difficulties.index(difficulty)
+
+            # ───────────────────────────────────────────────
+            #  Compute smarter can_promote_level
+            # ───────────────────────────────────────────────
+            level_stats = {}
+            passage_level_map = {}
+
+            # Preload mapping of passage_id → level for fast lookup
+            async for p in db.reading_passages.find({}, {"passage_id": 1, "level": 1}):
+                passage_level_map[p["passage_id"]] = p["level"]
+
+            for lvl in levels:
+                count = sum(
+                    1
+                    for s in submissions
+                    if passage_level_map.get(s["passage_id"]) == lvl
+                )
+                level_stats[lvl] = count
+
+            # Calculate average score for the current level
+            level_scores = [
+                s["evaluation_data"].get("score", 0)
+                for s in submissions
+                if passage_level_map.get(s["passage_id"]) == level
+            ]
+            avg_level_score = (
+                sum(level_scores) / len(level_scores) if level_scores else 0
+            )
+
+            #  Smart promotion rule:
+            # - Solved ≥ 3 passages in current level
+            # - AND avg score ≥ 7
+            can_promote_level = level_stats.get(level, 0) >= 3 and avg_level_score >= 7
+
+            # ───────────────────────────────────────────────
+            #  Decide Next Passage
+            # ───────────────────────────────────────────────
+            if RSI > 0.9 and can_promote_level and level_index < 2:
+                # Level up
+                level = levels[level_index + 1]
+                difficulty = "easy"
+            elif RSI > 0.7 and diff_index < 2:
+                # Increase difficulty
+                difficulty = difficulties[diff_index + 1]
+            elif RSI < 0.4 and diff_index > 0:
+                # Decrease difficulty
+                difficulty = difficulties[diff_index - 1]
+
+            seen_passages = [s["passage_id"] for s in submissions]
+
+            # Pick next unseen passage
+            next_passage_cursor = db.reading_passages.aggregate(
+                [
+                    {
+                        "$match": {
+                            "level": level,
+                            "difficulty": difficulty,
+                            "passage_id": {"$nin": seen_passages},
+                        }
+                    },
+                    {"$sample": {"size": 1}},
+                ]
+            )
+
+            next_passage = await next_passage_cursor.to_list(1)
+            if not next_passage:
+                # fallback if all seen
+                next_passage = await db.reading_passages.aggregate(
+                    [
+                        {"$match": {"level": level, "difficulty": difficulty}},
+                        {"$sample": {"size": 1}},
+                    ]
+                ).to_list(1)
+
+            if next_passage:
+                return {"passage_id": next_passage[0]["passage_id"]}
+            else:
+                return JSONResponse(
+                    status_code=404,
+                    content={"message": "No suitable passage found"},
+                )
+
+        # ───────────────────────────────────────────────
+        #  Manual Filters + Pagination
+        # ───────────────────────────────────────────────
         query = {}
         conditions = []  # List to hold all filter conditions
         # Parse comma-separated level-difficulty combinations
@@ -160,6 +296,22 @@ async def get_passages_list(
         )
 
 
+@router.get("/passages/{passage_id}/submissions")
+async def get_submissions(passage_id: str, user_id: str = Depends(get_current_user)):
+    try:
+        # Fetch submissions for this passage
+        submissions = await db.reading_evaluations.find(
+            {"passage_id": passage_id, "user_id": user_id},
+            {"_id": 0, "user_id": 0, "passage_id": 0},
+        ).to_list(None)
+        return submissions
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Server Error: {str(e)}"},
+        )
+
+
 @router.get("/passages/{passage_id}")
 async def get_passages(passage_id: str, user_id: str = Depends(get_current_user)):
     try:
@@ -176,7 +328,7 @@ async def get_passages(passage_id: str, user_id: str = Depends(get_current_user)
 
         # Check if passage is solved by this user
         solved = await db.reading_evaluations.find_one(
-            {"user_id": ObjectId(user_id), "passage_id": passage_id},
+            {"user_id": user_id, "passage_id": passage_id},
             {"evaluation_data": 1},  # projection
         )
 
@@ -191,53 +343,6 @@ async def get_passages(passage_id: str, user_id: str = Depends(get_current_user)
             status_code=500,
             content={"message": f"An error occurred: {str(e)}"},
         )
-
-
-# Verify reading answers
-@router.post("/verify")
-async def verify_reading(
-    answer: ReadingAnswer, user_id: str = Depends(get_current_user)
-):
-    story = await db.reading_passages.find_one({"passage_id": answer.story_id})
-    if not story:
-        raise HTTPException(404, "Story not found")
-    results = []
-    for ans in answer.answers:
-        question = next(
-            (q for q in story["questions"] if str(q["question_id"]) == ans.question_id),
-            None,
-        )
-        is_correct = (
-            question
-            and question["answer"].lower().strip() == ans.answer.lower().strip()
-        )
-        results.append(
-            {
-                "question_id": ans.question_id,
-                "correct": is_correct,
-                "question": question["question"],
-                "your_answer": ans.answer,
-                "correct_answer": question["answer"],
-                "explanation": question["explanation"],
-            }
-        )
-
-    # Save user answers
-    await db.reading_answers.insert_one(
-        {
-            "user_id": ObjectId(user_id),
-            "story_id": answer.story_id,
-            "answers": [
-                {
-                    "question_id": r["question_id"],
-                    "correct": r["correct"],
-                    "your_answer": r["your_answer"],
-                }
-                for r in results
-            ],
-        }
-    )
-    return results
 
 
 # Evaluate reading skills from audio data
@@ -260,10 +365,11 @@ async def evaluate_reading_skills(
     # Save evaluation result
     await db.reading_evaluations.insert_one(
         {
-            "user_id": ObjectId(user_id),
+            "user_id": user_id,
             "passage_id": evaluation.passage_id,
             "evaluation_data": result,
             "audio_segments": [segment.dict() for segment in evaluation.audio_data],
+            "submitted_at": datetime.utcnow(),
         }
     )
 
