@@ -137,24 +137,6 @@ async def get_topics(
             page_size,
         )
 
-        # Add solved status field if user is logged in
-        if user_id:
-            # Reuse the solved topics we already fetched, or fetch if not available
-            if "topic_ids_solved" not in locals():
-                topic_ids_solved = set()
-                solved = db.speaking_evaluations.find(
-                    {"user_id": user_id}, {"topic_id": 1}
-                )
-                topic_ids_solved = {doc["topic_id"] async for doc in solved}
-
-            for topic in data["results"]:
-                topic_id = topic.get("topic_id")
-                topic["solved"] = topic_id in topic_ids_solved
-        else:
-            # For anonymous users, mark all as unsolved
-            for topic in data["results"]:
-                topic["solved"] = False
-
         return data
 
     except Exception as e:
@@ -179,6 +161,42 @@ async def add_topic(topic: SpeakingTopic):
     return {**topic_doc, "_id": str(result.inserted_id)}
 
 
+@router.get("/topics/submissions")
+async def get_submissions(user_id: str = Depends(get_current_user)):
+    try:
+        # Fetch all submissions by user
+        submissions = await db.speaking_evaluations.find(
+            {"user_id": user_id}, {"_id": 0, "user_id": 0, "transcription": 0}
+        ).to_list(None)
+
+        if not submissions:
+            return []
+
+        # Extract all topic_ids from submissions
+        topics_ids = [s["topic_id"] for s in submissions]
+
+        # Fetch passage details for these passage_ids
+        topics = await db.speaking_topics.find(
+            {"topic_id": {"$in": topics_ids}},
+            {"_id": 0, "topic_id": 1, "title": 1},
+        ).to_list(None)
+
+        # Create a quick lookup map: {topic_id: title}
+        topic_map = {t["topic_id"]: t["title"] for t in topics}
+
+        # Append title to each submission
+        for sub in submissions:
+            sub["title"] = topic_map.get(sub["topic_id"], "Unknown Title")
+
+        return submissions
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Server Error: {str(e)}"},
+        )
+
+
 # Get speaking topics
 @router.get("/topics/{topic_id}")
 async def get_topic(topic_id: str, user_id: str = Depends(get_current_user)):
@@ -193,15 +211,6 @@ async def get_topic(topic_id: str, user_id: str = Depends(get_current_user)):
                 status_code=404,
                 content={"message": "Topic not found"},
             )
-
-        ## Check if topic is solved by this user
-        solved = await db.speaking_evaluations.find_one(
-            {"user_id": user_id, "topic_id": topic_id},
-            {"evaluation_data": 1},  # projection
-        )
-
-        topic["solved"] = bool(solved)
-        topic["evaluation_data"] = solved.get("evaluation_data") if solved else None
 
         return topic
 
@@ -307,6 +316,7 @@ Return JSON in this exact structure:
             "topic_id": request.topic_id,
             "evaluation_data": evaluation.dict(),
             "transcription": [segment.dict() for segment in request.transcription],
+            "submitted_at": datetime.utcnow(),
         }
 
         await db.speaking_evaluations.insert_one(evaluation_doc)

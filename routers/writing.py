@@ -22,7 +22,7 @@ class Feedback(BaseModel):
 
 
 class Evaluation(BaseModel):
-    score: int
+    overall_score: int
     feedback: Feedback
     example_answer: str
 
@@ -186,6 +186,42 @@ async def get_topics(
         )
 
 
+@router.get("/topics/submissions")
+async def get_submissions(user_id: str = Depends(get_current_user)):
+    try:
+        # Fetch all submissions by user
+        submissions = await db.writing_evaluations.find(
+            {"user_id": user_id}, {"_id": 0, "user_id": 0, "transcription": 0}
+        ).to_list(None)
+
+        if not submissions:
+            return []
+
+        # Extract all topic_ids from submissions
+        topics_ids = [s["topic_id"] for s in submissions]
+
+        # Fetch passage details for these passage_ids
+        topics = await db.writing_topics.find(
+            {"topic_id": {"$in": topics_ids}},
+            {"_id": 0, "topic_id": 1, "title": 1},
+        ).to_list(None)
+
+        # Create a quick lookup map: {topic_id: title}
+        topic_map = {t["topic_id"]: t["title"] for t in topics}
+
+        # Append title to each submission
+        for sub in submissions:
+            sub["title"] = topic_map.get(sub["topic_id"], "Unknown Title")
+
+        return submissions
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Server Error: {str(e)}"},
+        )
+
+
 @router.post("/topics")
 async def add_topic(topic: WritingTopicIn):
     topic_doc = {
@@ -272,9 +308,10 @@ Tasks:
    - areas_for_improvement: list of 3 improvement points
 3. Provide a well-written example answer.
 
-Return JSON in this structure:
+
+Strictly Return JSON in this structure:
 {{
-  "score": 0-10,
+  "overall_score": 0-10,
   "feedback": {{
     "strengths": ["...","...","..."],
     "areas_for_improvement": ["...","...","..."]
@@ -305,7 +342,7 @@ Return JSON in this structure:
         # 🗃️ 5. Prepare evaluation data
         evaluation_data = {
             "your_answer": answer.your_answer,
-            "score": evaluation.score,
+            "overall_score": evaluation.overall_score,
             "feedback": evaluation.feedback.dict(),
             "example_answer": evaluation.example_answer,
         }
