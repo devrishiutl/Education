@@ -134,26 +134,6 @@ async def get_passages_list(
             page_size,
         )
 
-        # Add solved status field if user is logged in
-        if user_id:
-            # Reuse the solved passages we already fetched, or fetch if not available
-            if "passage_ids_solved" not in locals():
-                passage_ids_solved = set()
-                solved = db.reading_evaluations.find(
-                    {"user_id": ObjectId(user_id)}, {"passage_id": 1}
-                )
-                passage_ids_solved = {doc["passage_id"] async for doc in solved}
-
-            for passage in data["results"]:
-                passage_id = passage.get("passage_id")
-                passage["solved"] = passage_id in passage_ids_solved
-                passage["passage"] = passage["passage"][:300] + "...."
-        else:
-            # For anonymous users, mark all as unsolved
-            for passage in data["results"]:
-                passage["solved"] = False
-                passage["passage"] = passage["passage"][:300] + "...."
-
         return data
 
     except Exception as e:
@@ -218,9 +198,6 @@ async def get_passages(passage_id: str, user_id: str = Depends(get_current_user)
             {"user_id": user_id, "passage_id": passage_id},
             {"evaluation_data": 1},  # projection
         )
-
-        passage["solved"] = bool(solved)
-        passage["evaluation_data"] = solved.get("evaluation_data") if solved else None
 
         return passage
 
