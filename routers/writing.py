@@ -159,24 +159,6 @@ async def get_topics(
             page_size,
         )
 
-        # Add solved status field if user is logged in
-        if user_id:
-            # Reuse the solved topics we already fetched, or fetch if not available
-            if "topic_ids_solved" not in locals():
-                topic_ids_solved = set()
-                solved = db.writing_evaluations.find(
-                    {"user_id": user_id}, {"topic_id": 1}
-                )
-                topic_ids_solved = {doc["topic_id"] async for doc in solved}
-
-            for topic in data["results"]:
-                topic_id = topic.get("topic_id")
-                topic["solved"] = topic_id in topic_ids_solved
-        else:
-            # For anonymous users, mark all as unsolved
-            for topic in data["results"]:
-                topic["solved"] = False
-
         return data
 
     except Exception as e:
