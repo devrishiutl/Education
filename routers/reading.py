@@ -23,6 +23,7 @@ router = APIRouter(prefix="/reading", tags=["Reading"])
 async def get_passages_list(
     page: int,
     page_size: int,
+    aiDecide: bool = Query(False),
     level_beginner: Optional[str] = Query(None, alias="level.beginner"),
     level_intermediate: Optional[str] = Query(None, alias="level.intermediate"),
     level_advanced: Optional[str] = Query(None, alias="level.advanced"),
@@ -31,7 +32,101 @@ async def get_passages_list(
 ):
     try:
         # ───────────────────────────────────────────────
-        #  Manual Filters + Pagination
+        # AI Decide Logic (adaptive passage selection)
+        # ───────────────────────────────────────────────
+        if aiDecide:
+            if not user_id:
+                # AI selection requires user context
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "message": "User authentication required for AI-based passage selection."
+                    },
+                )
+
+            # Fetch all previous submissions by this user
+            submissions = await db.reading_evaluations.find(
+                {"user_id": user_id},
+                {"_id": 0, "passage_id": 1, "evaluation_data.score": 1},
+            ).to_list(None)
+
+            if not submissions:
+                # If user has no submissions, start from beginner-easy
+                passage = await db.reading_passages.aggregate(
+                    [
+                        {"$match": {"level": "beginner", "difficulty": "easy"}},
+                        {"$sample": {"size": 1}},
+                        {
+                            "$project": {
+                                "_id": 0,
+                                "questions": 0,
+                                "standard": 0,
+                                "created_at": 0,
+                            }
+                        },
+                    ]
+                ).to_list(1)
+                return passage[0] if passage else []
+
+            # Map passage_id → (level, difficulty)
+            passages = await db.reading_passages.find(
+                {}, {"passage_id": 1, "level": 1, "difficulty": 1, "_id": 0}
+            ).to_list(None)
+            passage_level_map = {
+                p["passage_id"]: (p["level"], p["difficulty"]) for p in passages
+            }
+
+            # Aggregate average score per level
+            level_scores = {"beginner": [], "intermediate": [], "advanced": []}
+            for s in submissions:
+                pid = s["passage_id"]
+                if pid in passage_level_map:
+                    level, _ = passage_level_map[pid]
+                    level_scores[level].append(
+                        s.get("evaluation_data", {}).get("score", 0)
+                    )
+
+            avg_scores = {
+                level: (sum(scores) / len(scores) if scores else 0)
+                for level, scores in level_scores.items()
+            }
+
+            # Determine next target level based on performance
+            if avg_scores["beginner"] < 70:
+                next_level = "beginner"
+            elif avg_scores["intermediate"] < 70:
+                next_level = "intermediate"
+            else:
+                next_level = "advanced"
+
+            # Pick difficulty within target level adaptively
+            if next_level == "beginner":
+                difficulty = "easy"
+            elif next_level == "intermediate":
+                difficulty = "medium"
+            else:
+                difficulty = "hard"
+
+            # Get a random passage of that level & difficulty
+            passage = await db.reading_passages.aggregate(
+                [
+                    {"$match": {"level": next_level, "difficulty": difficulty}},
+                    {"$sample": {"size": 1}},
+                    {
+                        "$project": {
+                            "_id": 0,
+                            "questions": 0,
+                            "standard": 0,
+                            "created_at": 0,
+                        }
+                    },
+                ]
+            ).to_list(1)
+
+            return passage[0] if passage else []
+
+        # ───────────────────────────────────────────────
+        # Manual Filtering + Pagination (default path)
         # ───────────────────────────────────────────────
         query = {}
         conditions = []  # List to hold all filter conditions
@@ -202,12 +297,6 @@ async def get_passages(passage_id: str, user_id: str = Depends(get_current_user)
                 content={"message": "Passage not found"},
             )
 
-        # Check if passage is solved by this user
-        solved = await db.reading_evaluations.find_one(
-            {"user_id": user_id, "passage_id": passage_id},
-            {"evaluation_data": 1},  # projection
-        )
-
         return passage
 
     except Exception as e:
@@ -230,7 +319,10 @@ async def evaluate_reading_skills(
     # Get the passage
     passage = await db.reading_passages.find_one({"passage_id": evaluation.passage_id})
     if not passage:
-        raise HTTPException(404, "Passage not found")
+        return JSONResponse(
+            status_code=404,
+            content={"message": "Passage not found"},
+        )
 
     # Evaluate reading skills
     result = await evaluate_reading_skills_internal(passage, evaluation.audio_data)
