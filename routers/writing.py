@@ -236,15 +236,6 @@ async def get_topic(topic_id: str, user_id: str = Depends(get_current_user)):
                 content={"message": "Topic not found"},
             )
 
-        ## Check if topic is solved by this user
-        solved = await db.writing_evaluations.find_one(
-            {"user_id": user_id, "topic_id": topic_id},
-            {"evaluation_data": 1},  # projection
-        )
-
-        topic["solved"] = bool(solved)
-        topic["evaluation_data"] = solved.get("evaluation_data") if solved else None
-
         return topic
 
     except Exception as e:
