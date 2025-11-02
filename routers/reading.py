@@ -80,7 +80,7 @@ async def get_passages_list(
             if user_id:
                 passage_ids_solved = set()
                 solved = db.reading_evaluations.find(
-                    {"user_id": ObjectId(user_id)}, {"passage_id": 1}
+                    {"user_id": user_id}, {"passage_id": 1}
                 )
                 passage_ids_solved = {doc["passage_id"] async for doc in solved}
 
@@ -152,9 +152,13 @@ async def get_passages_list(
 async def get_submissions(user_id: str = Depends(get_current_user)):
     try:
         # Fetch all submissions by user
-        submissions = await db.reading_evaluations.find(
-            {"user_id": user_id}, {"_id": 0, "user_id": 0, "transcription": 0}
-        ).to_list(None)
+        submissions = (
+            await db.reading_evaluations.find(
+                {"user_id": user_id}, {"_id": 0, "user_id": 0, "transcription": 0}
+            )
+            .sort("submitted_at", -1)
+            .to_list(None)
+        )
 
         if not submissions:
             return []
