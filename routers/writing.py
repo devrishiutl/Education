@@ -35,6 +35,7 @@ router = APIRouter(prefix="/writing", tags=["Writing"])
 async def get_topics(
     page: int,
     page_size: int,
+    aiDecide: bool = Query(False),
     level_beginner: Optional[str] = Query(None, alias="level.beginner"),
     level_intermediate: Optional[str] = Query(None, alias="level.intermediate"),
     level_advanced: Optional[str] = Query(None, alias="level.advanced"),
@@ -43,7 +44,89 @@ async def get_topics(
     user_id: Optional[str] = Depends(get_current_user),
 ):
     try:
-        # Build base query with AND relationship
+        # ───────────────────────────────────────────────
+        # AI Decide Logic (Adaptive Writing Topic Selection)
+        # ───────────────────────────────────────────────
+        if aiDecide:
+            if not user_id:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "message": "User authentication required for AI-based topic selection."
+                    },
+                )
+
+            # Fetch all previous writing submissions by user
+            submissions = await db.writing_evaluations.find(
+                {"user_id": user_id},
+                {"_id": 0, "topic_id": 1, "evaluation_data.overall_score": 1},
+            ).to_list(None)
+
+            if not submissions:
+                # If no submissions → start with beginner easy topic
+                topic = await db.writing_topics.aggregate(
+                    [
+                        {"$match": {"level": "beginner", "difficulty": "easy"}},
+                        {"$sample": {"size": 1}},
+                        {"$project": {"_id": 0, "standard": 0, "created_at": 0}},
+                    ]
+                ).to_list(1)
+                return topic[0] if topic else []
+
+            # Map topic_id → (level, difficulty)
+            topics = await db.writing_topics.find(
+                {},
+                {"topic_id": 1, "level": 1, "difficulty": 1, "_id": 0},
+            ).to_list(None)
+            topic_level_map = {
+                t["topic_id"]: (t["level"], t["difficulty"]) for t in topics
+            }
+
+            # Calculate average scores by level
+            level_scores = {"beginner": [], "intermediate": [], "advanced": []}
+            for s in submissions:
+                tid = s["topic_id"]
+                if tid in topic_level_map:
+                    level, _ = topic_level_map[tid]
+                    level_scores[level].append(
+                        s.get("evaluation_data", {}).get("score", 0)
+                    )
+
+            avg_scores = {
+                level: (sum(scores) / len(scores) if scores else 0)
+                for level, scores in level_scores.items()
+            }
+
+            # Adaptive logic: pick next level and difficulty based on performance
+            if avg_scores["beginner"] < 70:
+                next_level = "beginner"
+                next_difficulty = "easy"
+            elif avg_scores["intermediate"] < 70:
+                next_level = "intermediate"
+                next_difficulty = "medium"
+            else:
+                next_level = "advanced"
+                next_difficulty = "hard"
+
+            # Optionally restrict by category (if provided)
+            match_stage = {"level": next_level, "difficulty": next_difficulty}
+            if category:
+                match_stage["category"] = category
+
+            # Pick one random writing topic from target level/difficulty
+            topic = await db.writing_topics.aggregate(
+                [
+                    {"$match": match_stage},
+                    {"$sample": {"size": 1}},
+                    {"$project": {"_id": 0, "standard": 0, "created_at": 0}},
+                ]
+            ).to_list(1)
+
+            return topic[0] if topic else []
+
+        # ───────────────────────────────────────────────
+        # Default Manual Filters + Pagination
+        # ───────────────────────────────────────────────
         query = {}
         conditions = []  # List to hold all filter conditions
         # Parse comma-separated level-difficulty combinations
@@ -172,9 +255,13 @@ async def get_topics(
 async def get_submissions(user_id: str = Depends(get_current_user)):
     try:
         # Fetch all submissions by user
-        submissions = await db.writing_evaluations.find(
-            {"user_id": user_id}, {"_id": 0, "user_id": 0, "transcription": 0}
-        ).to_list(None)
+        submissions = (
+            await db.writing_evaluations.find(
+                {"user_id": user_id}, {"_id": 0, "user_id": 0, "transcription": 0}
+            )
+            .sort("submitted_at", -1)
+            .to_list(None)
+        )
 
         if not submissions:
             return []
