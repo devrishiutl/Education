@@ -10,6 +10,11 @@ from fastapi.responses import JSONResponse
 import math
 import re
 from datetime import datetime
+from openai import AsyncOpenAI
+import json
+
+# Initialize OpenAI client
+client = AsyncOpenAI()
 
 router = APIRouter(prefix="/reading", tags=["Reading"])
 
@@ -269,7 +274,7 @@ async def evaluate_reading_skills_internal(passage, audio_data):
 
     try:
         # 1. Accuracy Evaluation (40% - 4 points)
-        accuracy_result = evaluate_accuracy(passage["passage"], valid_segments)
+        accuracy_result = await evaluate_accuracy(passage["passage"], valid_segments)
 
         # 2. Fluency Evaluation (40% - 4 points)
         fluency_result = evaluate_fluency(valid_segments)
@@ -328,12 +333,11 @@ def get_empty_evaluation_result(message):
     }
 
 
-def evaluate_accuracy(passage_text, audio_data):
-    """Evaluate reading accuracy (4 points)"""
+async def evaluate_accuracy(passage_text, audio_data):
+    """Evaluate reading accuracy (4 points) using LLM"""
     try:
-        passage_words = re.sub(r"[.,!?]", "", passage_text.lower()).split()
+        # Combine transcription text from audio segments
         user_words = []
-
         for segment in audio_data:
             # Convert AudioSegment Pydantic model to dict if needed
             if hasattr(segment, "dict"):
@@ -345,28 +349,103 @@ def evaluate_accuracy(passage_text, audio_data):
             user_words.extend(words)
 
         user_words = [word for word in user_words if word]
+        user_text = " ".join(user_words)
 
-        correct_words = 0
-        total_words = len(passage_words)
+        # Build LLM evaluation prompt
+        prompt = f"""
+You are an expert English reading skills evaluator. Evaluate the student's reading accuracy by comparing their spoken transcription with the original passage.
 
-        for i in range(min(len(passage_words), len(user_words))):
-            if passage_words[i] == user_words[i]:
-                correct_words += 1
+Original Passage:
+"{passage_text}"
 
-        accuracy_percentage = (
-            (correct_words / total_words) * 100 if total_words > 0 else 0
+Student's Spoken Transcription:
+"{user_text}"
+
+Tasks:
+1. Compare the student's transcription with the original passage word-by-word
+2. Count the exact number of correct words (words that match exactly, ignoring punctuation)
+3. Count the total number of words in the original passage
+4. Calculate the accuracy percentage
+5. Score the accuracy on a 4-point scale where:
+   - 4.0 points = 100% accuracy (all words correct)
+   - 3.0 points = 75% accuracy
+   - 2.0 points = 50% accuracy
+   - 1.0 points = 25% accuracy
+   - 0.0 points = below 25% accuracy
+
+Return JSON in this exact structure:
+{{
+  "correct_words": <integer number of correct words>,
+  "total_words": <integer total words in passage>,
+  "accuracy_percentage": <float percentage 0-100>,
+  "score": <float score 0-4.0>
+}}
+
+Important:
+- Only count exact word matches (case-insensitive, punctuation ignored)
+- If student skipped words, those are incorrect
+- If student added extra words, ignore them but don't count as correct
+- Score should be calculated as: (accuracy_percentage / 100) * 4, capped at 4.0
+"""
+
+        # Call OpenAI model
+        llm_response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
         )
 
-        # Convert to 4-point scale
-        accuracy_score = (accuracy_percentage / 100) * 4
+        # Parse response safely
+        try:
+            content = llm_response.choices[0].message.content
+            evaluation = json.loads(content)
 
-        return {
-            "score": min(4, accuracy_score),
-            "accuracy_percentage": accuracy_percentage,
-            "correct_words": correct_words,
-            "total_words": total_words,
-        }
+            # Calculate total words for fallback
+            passage_words_count = len(
+                re.sub(r"[.,!?]", "", passage_text.lower()).split()
+            )
+
+            # Validate and extract values
+            correct_words = int(evaluation.get("correct_words", 0))
+            total_words = int(evaluation.get("total_words", passage_words_count))
+            accuracy_percentage = float(evaluation.get("accuracy_percentage", 0))
+            score = float(evaluation.get("score", 0))
+
+            # Ensure score is within bounds (0-4)
+            score = max(0, min(4, score))
+
+            return {
+                "score": score,
+                "accuracy_percentage": accuracy_percentage,
+                "correct_words": correct_words,
+                "total_words": total_words,
+            }
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            # Fallback to basic word matching if LLM response is invalid
+            passage_words_clean = re.sub(r"[.,!?]", "", passage_text.lower()).split()
+            user_words_clean = user_text.split()
+
+            correct_words = 0
+            total_words = len(passage_words_clean)
+
+            for i in range(min(len(passage_words_clean), len(user_words_clean))):
+                if passage_words_clean[i] == user_words_clean[i]:
+                    correct_words += 1
+
+            accuracy_percentage = (
+                (correct_words / total_words) * 100 if total_words > 0 else 0
+            )
+            accuracy_score = (accuracy_percentage / 100) * 4
+
+            return {
+                "score": min(4, accuracy_score),
+                "accuracy_percentage": accuracy_percentage,
+                "correct_words": correct_words,
+                "total_words": total_words,
+            }
+
     except Exception as e:
+        # Final fallback
         return {
             "score": 0,
             "accuracy_percentage": 0,
