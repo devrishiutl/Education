@@ -356,7 +356,7 @@ Evaluation Criteria:
 
 Tasks:
 1. Score each criterion from 0 to 10
-2. Provide detailed feedback explaining the scores
+2. Provide concise, structured detailed feedback using bullet points ONLY (keep it under 250 words)
 3. List 3 strengths and 3 areas for improvement
 4. Provide an example response for this topic
 
@@ -370,9 +370,19 @@ Return JSON in this exact structure:
     "strengths": ["strength1", "strength2", "strength3"],
     "areas_for_improvement": ["improvement1", "improvement2", "improvement3"]
   }},
-  "detailed_feedback": "Detailed explanation of the evaluation...",
+  "detailed_feedback": "- **Fluency:** Brief explanation of fluency performance with specific examples from the response.\\n- **Pronunciation:** Brief explanation of pronunciation accuracy, word stress, and clarity.\\n- **Content Relevance:** Brief explanation of how well the response addressed the topic and maintained relevance.",
   "example_response": "Example response for this topic..."
 }}
+
+IMPORTANT: The "detailed_feedback" field must be:
+- Formatted using bullet points ONLY (each point must start with "-")
+- Concise (under 90 words total)
+- Actionable and specific
+- Do NOT include score numbers (X/10) in the detailed_feedback - only provide explanations
+- Do NOT include headers (##, ###) - use bullet points only
+- MUST use bullet points for all content - format each criterion and key takeaways as bullet points
+- Include brief explanations for each criterion (Fluency, Pronunciation, Content Relevance) as separate bullet points
+- Use markdown syntax: bold (**text**) for labels, bullet points (-), line breaks (\\n)
 """
 
         # Call OpenAI model
