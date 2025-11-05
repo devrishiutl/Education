@@ -47,7 +47,7 @@ async def get_passages_list(
             # Fetch all previous submissions by this user
             submissions = await db.reading_evaluations.find(
                 {"user_id": user_id},
-                {"_id": 0, "passage_id": 1, "evaluation_data.score": 1},
+                {"_id": 0, "passage_id": 1, "evaluation_data.overall_score": 1},
             ).to_list(None)
 
             if not submissions:
@@ -83,7 +83,7 @@ async def get_passages_list(
                 if pid in passage_level_map:
                     level, _ = passage_level_map[pid]
                     level_scores[level].append(
-                        s.get("evaluation_data", {}).get("score", 0)
+                        s.get("evaluation_data", {}).get("overall_score", 0)
                     )
 
             avg_scores = {
