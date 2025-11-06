@@ -6,7 +6,7 @@ from bson import ObjectId
 from datetime import datetime
 from utils.jwt import get_current_user
 import uuid
-from utils.allFunctions import AllFunctions
+from utils.allFunctions import paginate
 from typing import List
 from pydantic import BaseModel
 from typing import List, Optional
@@ -230,7 +230,7 @@ async def get_topics(
                 query["$and"] = conditions
 
         # Get paginated topics
-        data = await AllFunctions().paginate(
+        data = await paginate(
             db.writing_topics,
             query,
             {

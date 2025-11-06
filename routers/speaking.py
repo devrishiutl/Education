@@ -9,7 +9,7 @@ from models import (
 from datetime import datetime
 from utils.jwt import get_current_user
 import uuid
-from utils.allFunctions import AllFunctions
+from utils.allFunctions import paginate
 from typing import Optional
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI
@@ -204,7 +204,7 @@ async def get_topics(
                 query["$and"] = conditions
 
         # Get paginated topics
-        data = await AllFunctions().paginate(
+        data = await paginate(
             db.speaking_topics,
             query,
             {

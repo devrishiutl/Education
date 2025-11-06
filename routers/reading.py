@@ -4,7 +4,7 @@ from database import db
 from models import ReadingAnswer, ReadingEvaluation, AudioSegment
 from bson import ObjectId
 from utils.jwt import get_current_user
-from utils.allFunctions import AllFunctions
+from utils.allFunctions import paginate
 from typing import List, Optional
 from fastapi.responses import JSONResponse
 import math
@@ -15,7 +15,6 @@ import json
 
 # Initialize OpenAI client
 client = AsyncOpenAI()
-
 router = APIRouter(prefix="/reading", tags=["Reading"])
 
 
@@ -221,7 +220,7 @@ async def get_passages_list(
                 query["$and"] = conditions
 
         # Get paginated passages
-        data = await AllFunctions().paginate(
+        data = await paginate(
             db.reading_passages,
             query,
             {
