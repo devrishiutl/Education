@@ -7,6 +7,7 @@ import random
 from datetime import datetime, timedelta
 from utils.jwt import create_access_token, get_current_user
 from bson import ObjectId
+from fastapi.responses import JSONResponse
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -113,7 +114,10 @@ async def login(user: UserLogin):
         }
     )
     if not existing or not bcrypt.verify(user.password, existing["password_hash"]):
-        raise HTTPException(400, "Invalid credentials")
+        return JSONResponse(
+            status_code=400,
+            content={"message": "Invalid credentials"},
+        )
 
     # ✅ Create JWT token
     token = create_access_token(str(existing["_id"]))
