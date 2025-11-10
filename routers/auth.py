@@ -18,7 +18,10 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 async def verify_phone(phone: VerifyPhone):
     existing = await db.users.find_one({"phone": phone.phone})
     if existing:
-        raise HTTPException(400, "User already exists")
+        return JSONResponse(
+            status_code=400,
+            content={"message": "User already exists"},
+        )
     otp = str(random.randint(100000, 999999))
     expires_at = datetime.utcnow() + timedelta(minutes=5)
     existing = await db.otps.find_one({"phone": phone.phone})
