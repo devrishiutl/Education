@@ -129,6 +129,12 @@ async def login(user: UserLogin):
 # Send OTP
 @router.post("/send-otp")
 async def send_otp(phone: VerifyPhone):
+    user = await db.users.find_one({"phone": phone.phone})
+    if not user:
+        return JSONResponse(
+            status_code=400,
+            content={"message": "User not found"},
+        )
     otp = str(random.randint(100000, 999999))
     expires_at = datetime.utcnow() + timedelta(minutes=5)
     # await db.otps.insert_one({"phone": phone.phone, "otp": otp, "expires_at": expires_at, "verified": False})
@@ -149,9 +155,15 @@ async def confirm_otp(data: OTPVerify):
         {"phone": data.phone, "otp": data.otp, "verified": False}
     )
     if not record:
-        raise HTTPException(400, "Invalid OTP")
+        return JSONResponse(
+            status_code=400,
+            content={"message": "Invalid OTP"},
+        )
     if record["expires_at"] < datetime.utcnow():
-        raise HTTPException(400, "OTP expired")
+        return JSONResponse(
+            status_code=400,
+            content={"message": "OTP expired"},
+        )
     await db.otps.update_one({"_id": record["_id"]}, {"$set": {"verified": True}})
     await db.users.update_one(
         {"phone": data.phone}, {"$set": {"is_phone_verified": True}}
@@ -162,13 +174,15 @@ async def confirm_otp(data: OTPVerify):
 
 
 @router.post("/update-password")
-async def update_password(
-    password: str = Body(..., embed=True), user_id: str = Depends(get_current_user)
-):
-    if not user_id:
-        raise HTTPException(400, "User not found")
+async def update_password(phone: str = Body(...), password: str = Body(...)):
+    user = await db.users.find_one({"phone": phone})
+    if not user:
+        return JSONResponse(
+            status_code=400,
+            content={"message": "User not found"},
+        )
     hashed_password = bcrypt.hash(password)
     await db.users.update_one(
-        {"_id": ObjectId(user_id)}, {"$set": {"password_hash": hashed_password}}
+        {"phone": phone}, {"$set": {"password_hash": hashed_password}}
     )
     return {"message": "Password updated successfully"}
