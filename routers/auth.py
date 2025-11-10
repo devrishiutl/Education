@@ -48,25 +48,19 @@ async def verify_phone(phone: VerifyPhone):
 # Register
 @router.post("/verify-phone")
 async def register(user: UserRegister, otp: OTPVerify):
-    # existing = await db.users.find_one({"email": user.email})
-    existing = await db.users.find_one(
-        {
-            "$or": [
-                {"email": {"$eq": user.email, "$nin": [None, ""]}},
-                {"phone": {"$eq": user.phone, "$nin": [None, ""]}},
-            ]
-        }
-    )
-    if existing:
-        raise HTTPException(400, "User already exists")
-
     record = await db.otps.find_one(
         {"phone": user.phone, "otp": otp.otp, "verified": False}
     )
     if not record:
-        raise HTTPException(400, "Invalid OTP")
+        return JSONResponse(
+            status_code=400,
+            content={"message": "Invalid OTP"},
+        )
     if record["expires_at"] < datetime.utcnow():
-        raise HTTPException(400, "OTP expired")
+        return JSONResponse(
+            status_code=400,
+            content={"message": "OTP expired"},
+        )
     await db.otps.update_one({"_id": record["_id"]}, {"$set": {"verified": True}})
     await db.users.update_one(
         {"phone": user.phone}, {"$set": {"is_phone_verified": True}}
