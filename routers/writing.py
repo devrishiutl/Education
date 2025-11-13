@@ -348,8 +348,9 @@ async def submit_writing(
 
         # 🧠 2. Build the LLM evaluation prompt
         prompt = f"""
-You are an English writing evaluator.
-The topic details are:
+You are a strict English writing evaluator. Evaluate the student's writing answer based on the topic requirements.
+
+Topic details:
 Category: {topic.get('category', 'N/A')}
 Title: {topic.get('title', 'N/A')}
 Description: {topic.get('description', 'N/A')}
@@ -361,15 +362,30 @@ Guidelines: {topic.get('guidelines', 'None')}
 Student's answer:
 {answer.your_answer}
 
+CRITICAL SCORING GUIDELINES:
+- Incomplete answers (only greetings, single sentences, or fragments) MUST score 0-2
+- Answers that don't address the topic at all MUST score 0-1
+- Very short answers (less than 50 words) that don't fully address the topic should score 0-3
+- Answers lacking proper structure, body paragraphs, or conclusion should score 0-4
+- Only award scores 5+ if the answer genuinely attempts to address the topic with substance
+
+Score from 0-10 based on:
+1. **Completeness** (30%): Does it fully address the topic? Is it substantive enough?
+2. **Relevance** (25%): Does it stay on topic and address the requirements?
+3. **Structure** (20%): Does it have proper introduction, body, and conclusion?
+4. **Clarity & Grammar** (15%): Is it well-written with correct grammar?
+5. **Adherence to Guidelines** (10%): Does it follow the provided guidelines?
+
 Tasks:
-1. Score the answer from 0 to 10 based on relevance, clarity, grammar, structure, and adherence to guidelines.
-2. Give feedback with two lists:
-   - strengths: list of 3 positive points
-   - areas_for_improvement: list of 3 improvement points
-3. Provide a well-written example answer.
+1. Assign an overall_score (0-10) following the CRITICAL SCORING GUIDELINES above
+2. Provide feedback with:
+   - strengths: list of 3 positive points (or note what's missing if answer is incomplete)
+   - areas_for_improvement: list of 3 specific improvement points
+3. Write a well-structured example answer that properly addresses the topic
 
+IMPORTANT: Be strict. A greeting alone or minimal text is NOT a complete answer and deserves 0-2 points.
 
-Strictly Return JSON in this structure:
+Return ONLY valid JSON in this exact structure:
 {{
   "overall_score": 0-10,
   "feedback": {{
