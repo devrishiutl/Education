@@ -379,11 +379,11 @@ Score from 0-10 based on:
 Tasks:
 1. Assign an overall_score (0-10) following the CRITICAL SCORING GUIDELINES above
 2. Provide feedback with:
-   - strengths: list of 3 positive points (or note what's missing if answer is incomplete)
-   - areas_for_improvement: list of 3 specific improvement points
+   - strengths: list of 3 positive points. IF the answer is off-topic or doesn't address the requirements, DO NOT praise irrelevant content. Instead, mention what's missing (e.g., "Answer does not address the topic", "No mention of the required subject", "Content is completely unrelated to the task")
+   - areas_for_improvement: list of 3 specific, actionable improvement points. IF the answer is off-topic, focus improvements on WHAT needs to be written about (the actual topic) rather than critiquing the structure or quality of the irrelevant content. Be direct: "Must write about [the actual topic]", "Need to include [required elements]", "Should focus entirely on [topic requirement]"
 3. Write a well-structured example answer that properly addresses the topic
 
-IMPORTANT: Be strict. A greeting alone or minimal text is NOT a complete answer and deserves 0-2 points.
+IMPORTANT: Be strict. A greeting alone or minimal text is NOT a complete answer and deserves 0-2 points. If the answer is completely off-topic, do NOT praise the off-topic content in strengths - instead note what is missing or wrong.
 
 Return ONLY valid JSON in this exact structure:
 {{
