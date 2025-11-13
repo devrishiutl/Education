@@ -48,9 +48,7 @@ async def verify_phone(phone: VerifyPhone):
 # Register
 @router.post("/verify-phone")
 async def register(user: UserRegister, otp: OTPVerify):
-    record = await db.otps.find_one(
-        {"phone": user.phone, "otp": otp.otp, "verified": False}
-    )
+    record = await db.otps.find_one({"phone": user.phone, "verified": False})
     if not record:
         return JSONResponse(
             status_code=400,
@@ -148,9 +146,7 @@ async def send_otp(phone: VerifyPhone):
 # Confirm OTP
 @router.post("/confirm-otp")
 async def confirm_otp(data: OTPVerify):
-    record = await db.otps.find_one(
-        {"phone": data.phone, "otp": data.otp, "verified": False}
-    )
+    record = await db.otps.find_one({"phone": data.phone, "verified": False})
     if not record:
         return JSONResponse(
             status_code=400,
