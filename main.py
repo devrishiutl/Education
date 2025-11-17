@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from dotenv import load_dotenv
+
 load_dotenv()  # Load env variables once
 import logging
 import os
@@ -13,36 +14,55 @@ from story_generator import generate_story
 import uvicorn
 from pdf2image import convert_from_path
 import tempfile
-from difficult_word import extract_difficult_words, extract_text_from_pdf, expand_word_entries
+from difficult_word import (
+    extract_difficult_words,
+    extract_text_from_pdf,
+    expand_word_entries,
+)
 from fastapi import UploadFile, Form
 from typing import List
 from mongodb_client import MongoDBClient
 from contextlib import asynccontextmanager
 from grammar_question_answer import app_graph, CurriculumEntry
 from fastapi import Body
-from routers import auth, profile, dashboard, vocabulary, grammar, reading, writing, speaking
-from unseen_passage_generator import app_graph as unseen_passage_generator, PassageRequest
+from routers import (
+    auth,
+    profile,
+    dashboard,
+    vocabulary,
+    grammar,
+    reading,
+    writing,
+    speaking,
+)
+from unseen_passage_generator import (
+    app_graph as unseen_passage_generator,
+    PassageRequest,
+)
+
 # from routes import router
 
 from fastapi import FastAPI
+
 # Setup logging
-if not os.path.exists('logs'):
-    os.makedirs('logs')
+if not os.path.exists("logs"):
+    os.makedirs("logs")
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         RotatingFileHandler(
-            'logs/story_generator.log',
-            maxBytes=10*1024*1024,
+            "logs/story_generator.log",
+            maxBytes=10 * 1024 * 1024,
             backupCount=5,
-            encoding='utf-8'
+            encoding="utf-8",
         )
-    ]
+    ],
 )
 logging.getLogger().handlers[0].setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
+
 
 # Initialize FastAPI app
 @asynccontextmanager
@@ -52,6 +72,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         app.state.mongodb_client.close_connection()
+
 
 app = FastAPI(lifespan=lifespan)
 # app.include_router(router)
@@ -63,6 +84,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 class StoryGeneratorRequest(BaseModel):
     standard: str
@@ -92,11 +114,19 @@ app.include_router(reading.router)
 app.include_router(writing.router)
 app.include_router(speaking.router)
 
+
 @app.post("/api/education/story-generator")
 async def story_generator(request: StoryGeneratorRequest):
     """Generate a story based on the request"""
     try:
-        result = generate_story(request.standard, request.subject, request.chapter, request.emotion, request.story_length, request.language)
+        result = generate_story(
+            request.standard,
+            request.subject,
+            request.chapter,
+            request.emotion,
+            request.story_length,
+            request.language,
+        )
         return result
     except Exception as e:
         logger.error(f"Error generating story: {str(e)}")
@@ -104,21 +134,18 @@ async def story_generator(request: StoryGeneratorRequest):
 
 
 @app.post("/api/education/word-meaning-generator")
-async def word_meaning(
-    files: List[UploadFile],
-    standard: int = Form(...)
-) -> dict:
+async def word_meaning(files: List[UploadFile], standard: int = Form(...)) -> dict:
     """Extract text from PDF and generate educational flashcards using PyMuPDF"""
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
-    
+
     pdf_file = files[0]
 
-    if not pdf_file.filename or not pdf_file.filename.lower().endswith('.pdf'):
+    if not pdf_file.filename or not pdf_file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
-    
+
     file_content = await pdf_file.read()
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
         temp_pdf.write(file_content)
         temp_pdf.flush()
         pdf_path = temp_pdf.name
@@ -141,11 +168,11 @@ async def word_meaning(
     # app.state.mongodb_client.insert_flashcards(flashcards)
     # app.state.mongodb_client.collection.insert_many(flashcards["words"])
 
-
     for word in flashcards["words"]:
         word.pop("_id", None)
 
     return flashcards
+
 
 @app.post("/api/education/grammar-question-answer-generator")
 async def generate_all(curriculum: List[CurriculumEntry] = Body(...)):
@@ -166,13 +193,16 @@ async def generate_all(curriculum: List[CurriculumEntry] = Body(...)):
                         # # app.state.mongodb_client.collection.insert_many(records)
                         print("================================================")
 
-        return {"status": "success", "message": "Questions generated and stored in MongoDB"}
+        return {
+            "status": "success",
+            "message": "Questions generated and stored in MongoDB",
+        }
 
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate grammar questions: {str(e)}"
+            status_code=500, detail=f"Failed to generate grammar questions: {str(e)}"
         )
+
 
 @app.post("/api/education/generate_passage")
 async def generate_passage_endpoint(request: PassageRequest):
@@ -182,7 +212,7 @@ async def generate_passage_endpoint(request: PassageRequest):
             "title": request.title,
             "level": request.level,
             "difficulty": request.difficulty,
-            "length": request.length
+            "length": request.length,
         }
         result = await unseen_passage_generator.ainvoke(state)
         return {"status": "success", "data": result}
@@ -192,4 +222,4 @@ async def generate_passage_endpoint(request: PassageRequest):
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8004, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8004, reload=True)
