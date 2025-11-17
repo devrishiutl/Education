@@ -9,7 +9,7 @@ router = APIRouter(prefix="/vocabulary", tags=["Vocabulary"])
 
 
 # Get all vocabulary
-@router.get("/")
+@router.get("/list")
 async def get_vocabulary(
     page: int, page_size: int, user_id: str = Depends(get_current_user)
 ):
